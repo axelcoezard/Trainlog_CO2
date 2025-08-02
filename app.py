@@ -211,6 +211,7 @@ from src.trips import (
 from src.paths import Path
 
 app = Flask(__name__)
+app.config['DEBUG'] = True
 Compress(app)
 app.autoversion = True
 Autoversion(app)

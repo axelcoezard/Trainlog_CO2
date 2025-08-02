@@ -4,8 +4,27 @@
 {% include nav %}
 
 <div class="container">
-    <h1 class="mt-3">{{ feature_requests_title }}</h1>
-    <p class="text-muted">{{ feature_requests_subtitle }}</p>
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
+        <div>
+            <h1>{{ feature_requests_title }}</h1>
+            <p class="text-muted">{{ feature_requests_subtitle }}</p>
+        </div>
+        
+        <!-- Sort dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fa-solid fa-sort"></i> {{ feature_requests_sort_label }} {{ feature_requests_sort_by_score if current_sort == 'score' else feature_requests_sort_by_date }}
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item {{ 'active' if current_sort == 'score' else '' }}" href="{{ url_for('feature_requests.feature_requests', sort='score') }}">
+                    <i class="fa-solid fa-trophy"></i> {{ feature_requests_sort_by_score }}
+                </a></li>
+                <li><a class="dropdown-item {{ 'active' if current_sort == 'date' else '' }}" href="{{ url_for('feature_requests.feature_requests', sort='date') }}">
+                    <i class="fa-solid fa-calendar"></i> {{ feature_requests_sort_by_date }}
+                </a></li>
+            </ul>
+        </div>
+    </div>
     
     {% if logged_in_user and username and username != "public" %}
         <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#requestModal">
@@ -80,8 +99,12 @@
                         <div class="col-md-11 col-10">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1">
-                                    <h5 class="card-title mb-1">{{ request.title }}</h5>
-                                    <p class="card-text">{{ request.description }}</p>
+                                    <h5 class="card-title mb-1">
+                                        <a href="{{ url_for('feature_requests.single_feature_request', request_id=request.id) }}" class="text-decoration-none">
+                                            {{ request.title }}
+                                        </a>
+                                    </h5>
+                                    <p class="card-text">{{ request.description[:200] }}{% if request.description|length > 200 %}...{% endif %}</p>
                                     <small class="text-muted">
                                         {{ feature_requests_by }} 
                                         {% if request.author_display == "admin" %}
@@ -138,6 +161,9 @@
                                         <i class="fa-solid fa-chevron-up text-success"></i> {{ request.upvotes }} 
                                         <i class="fa-solid fa-chevron-down text-danger ms-2"></i> {{ request.downvotes }}
                                     </span>
+                                    <a href="{{ url_for('feature_requests.single_feature_request', request_id=request.id) }}" class="ms-3 text-decoration-none">
+                                        <i class="fa-solid fa-eye"></i> {{ feature_requests_view_details }}
+                                    </a>
                                 </small>
                                 
                                 {% if is_owner %}
@@ -186,87 +212,13 @@
                         {% for request in completed_requests %}
                         <div class="card mb-2">
                             <div class="card-body">
-                                <div class="row">
-                                    <!-- Voting Section -->
-                                    <div class="col-md-1 col-2 text-center">
-                                        <div class="btn btn-sm btn-outline-success mb-1 disabled">
-                                            <i class="fa-solid fa-chevron-up"></i>
-                                        </div>
-                                        <div class="fw-bold text-{{ 'success' if request.score > 0 else 'danger' if request.score < 0 else 'muted' }}">
-                                            {{ request.score }}
-                                        </div>
-                                        <div class="btn btn-sm btn-outline-danger mt-1 disabled">
-                                            <i class="fa-solid fa-chevron-down"></i>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Content Section -->
-                                    <div class="col-md-11 col-10">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="flex-grow-1">
-                                                <h6 class="card-title mb-1">{{ request.title }}</h6>
-                                                <p class="card-text small">{{ request.description }}</p>
-                                                <small class="text-muted">
-                                                    {{ feature_requests_by }} 
-                                                    {% if request.author_display == "admin" %}
-                                                        <span class="badge bg-warning text-dark">
-                                                            <i class="fa-solid fa-crown"></i> admin
-                                                        </span>
-                                                    {% else %}
-                                                    <span class="badge bg-primary text-white">
-                                                        {{ request.author_display }}
-                                                    </span>
-                                                    {% endif %}
-                                                     • 
-                                                    {% if request.created %}
-                                                        {{ request.created.strftime('%Y-%m-%d %H:%M') }}
-                                                    {% else %}
-                                                        {{ feature_requests_unknown }}
-                                                    {% endif %}
-                                                </small>
-                                            </div>
-                                            
-                                            <div class="ms-3 d-flex flex-column align-items-end">
-                                                <span class="badge bg-success mb-2">{{ feature_requests_status_completed }}</span>
-                                                {% if logged_in_user and username and (is_owner or request.author_display == logged_in_user) %}
-                                                    <div class="btn-group btn-group-sm">
-                                                        <button type="button" class="btn btn-outline-secondary" 
-                                                                onclick="editRequest({{ request.id }}, '{{ request.title|e }}', '{{ request.description|e }}')">
-                                                            <i class="fa-solid fa-edit"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-danger" 
-                                                                onclick="deleteRequest({{ request.id }}, '{{ request.title|e }}')">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="mt-2">
-                                            <small class="text-muted">
-                                                <span class="text-decoration-none" onclick="showVoters({{ request.id }})" style="cursor: pointer;">
-                                                    <i class="fa-solid fa-chevron-up text-success"></i> {{ request.upvotes }} 
-                                                    <i class="fa-solid fa-chevron-down text-danger ms-2"></i> {{ request.downvotes }}
-                                                </span>
-                                            </small>
-                                            
-                                            {% if is_owner %}
-                                            <div class="mt-2">
-                                                <form method="POST" action="{{ url_for('feature_requests.update_feature_request_status', username=username) }}" class="d-inline">
-                                                    <input type="hidden" name="request_id" value="{{ request.id }}">
-                                                    <select name="status" class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
-                                                        <option value="open" {{ 'selected' if request.status == 'open' else '' }}>{{ feature_requests_status_open }}</option>
-                                                        <option value="working_on_it" {{ 'selected' if request.status == 'working_on_it' else '' }}>{{ feature_requests_status_working }}</option>
-                                                        <option value="completed" {{ 'selected' if request.status == 'completed' else '' }}>{{ feature_requests_status_completed }}</option>
-                                                        <option value="not_doing" {{ 'selected' if request.status == 'not_doing' else '' }}>{{ feature_requests_status_not_doing }}</option>
-                                                    </select>
-                                                </form>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
+                                <h6 class="card-title mb-1">
+                                    <a href="{{ url_for('feature_requests.single_feature_request', request_id=request.id) }}" class="text-decoration-none">
+                                        {{ request.title }}
+                                    </a>
+                                </h6>
+                                <p class="card-text small">{{ request.description[:150] }}{% if request.description|length > 150 %}...{% endif %}</p>
+                                <small class="text-muted">{{ feature_requests_score }}: {{ request.score }} • {{ request.created.strftime('%Y-%m-%d') if request.created }}</small>
                             </div>
                         </div>
                         {% endfor %}
@@ -290,87 +242,13 @@
                         {% for request in not_doing_requests %}
                         <div class="card mb-2">
                             <div class="card-body">
-                                <div class="row">
-                                    <!-- Voting Section -->
-                                    <div class="col-md-1 col-2 text-center">
-                                        <div class="btn btn-sm btn-outline-success mb-1 disabled">
-                                            <i class="fa-solid fa-chevron-up"></i>
-                                        </div>
-                                        <div class="fw-bold text-{{ 'success' if request.score > 0 else 'danger' if request.score < 0 else 'muted' }}">
-                                            {{ request.score }}
-                                        </div>
-                                        <div class="btn btn-sm btn-outline-danger mt-1 disabled">
-                                            <i class="fa-solid fa-chevron-down"></i>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Content Section -->
-                                    <div class="col-md-11 col-10">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="flex-grow-1">
-                                                <h6 class="card-title mb-1">{{ request.title }}</h6>
-                                                <p class="card-text small">{{ request.description }}</p>
-                                                <small class="text-muted">
-                                                    {{ feature_requests_by }} 
-                                                    {% if request.author_display == "admin" %}
-                                                        <span class="badge bg-warning text-dark">
-                                                            <i class="fa-solid fa-crown"></i> admin
-                                                        </span>
-                                                    {% else %}
-                                                    <span class="badge bg-primary text-white">
-                                                        {{ request.author_display }}
-                                                    </span>
-                                                    {% endif %}
-                                                     • 
-                                                    {% if request.created %}
-                                                        {{ request.created.strftime('%Y-%m-%d %H:%M') }}
-                                                    {% else %}
-                                                        {{ feature_requests_unknown }}
-                                                    {% endif %}
-                                                </small>
-                                            </div>
-                                            
-                                            <div class="ms-3 d-flex flex-column align-items-end">
-                                                <span class="badge bg-secondary mb-2">{{ feature_requests_status_not_doing }}</span>
-                                                {% if logged_in_user and username and (is_owner or request.author_display == logged_in_user) %}
-                                                    <div class="btn-group btn-group-sm">
-                                                        <button type="button" class="btn btn-outline-secondary" 
-                                                                onclick="editRequest({{ request.id }}, '{{ request.title|e }}', '{{ request.description|e }}')">
-                                                            <i class="fa-solid fa-edit"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-danger" 
-                                                                onclick="deleteRequest({{ request.id }}, '{{ request.title|e }}')">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="mt-2">
-                                            <small class="text-muted">
-                                                <a href="#" class="text-decoration-none" onclick="showVoters({{ request.id }})">
-                                                    <i class="fa-solid fa-chevron-up text-success"></i> {{ request.upvotes }} 
-                                                    <i class="fa-solid fa-chevron-down text-danger ms-2"></i> {{ request.downvotes }}
-                                                </a>
-                                            </small>
-                                            
-                                            {% if is_owner %}
-                                            <div class="mt-2">
-                                                <form method="POST" action="{{ url_for('feature_requests.update_feature_request_status', username=username) }}" class="d-inline">
-                                                    <input type="hidden" name="request_id" value="{{ request.id }}">
-                                                    <select name="status" class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
-                                                        <option value="open" {{ 'selected' if request.status == 'open' else '' }}>{{ feature_requests_status_open }}</option>
-                                                        <option value="working_on_it" {{ 'selected' if request.status == 'working_on_it' else '' }}>{{ feature_requests_status_working }}</option>
-                                                        <option value="completed" {{ 'selected' if request.status == 'completed' else '' }}>{{ feature_requests_status_completed }}</option>
-                                                        <option value="not_doing" {{ 'selected' if request.status == 'not_doing' else '' }}>{{ feature_requests_status_not_doing }}</option>
-                                                    </select>
-                                                </form>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
+                                <h6 class="card-title mb-1">
+                                    <a href="{{ url_for('feature_requests.single_feature_request', request_id=request.id) }}" class="text-decoration-none">
+                                        {{ request.title }}
+                                    </a>
+                                </h6>
+                                <p class="card-text small">{{ request.description[:150] }}{% if request.description|length > 150 %}...{% endif %}</p>
+                                <small class="text-muted">Score: {{ request.score }} • {{ request.created.strftime('%Y-%m-%d') if request.created }}</small>
                             </div>
                         </div>
                         {% endfor %}
@@ -394,118 +272,13 @@
                         {% for request in negative_requests %}
                         <div class="card mb-2">
                             <div class="card-body">
-                                <div class="row">
-                                    <!-- Voting Section -->
-                                    <div class="col-md-1 col-2 text-center">
-                                        {% if logged_in_user and not is_owner and username %}
-                                            <form method="POST" action="{{ url_for('feature_requests.vote_feature_request', username=username) }}" class="d-inline">
-                                                <input type="hidden" name="request_id" value="{{ request.id }}">
-                                                <input type="hidden" name="vote_type" value="upvote">
-                                                <button type="submit" class="btn btn-sm {{ 'btn-success' if request.user_vote == 1 else 'btn-outline-success' }} mb-1">
-                                                    <i class="fa-solid fa-chevron-up"></i>
-                                                </button>
-                                            </form>
-                                        {% else %}
-                                            <div class="btn btn-sm btn-outline-success mb-1 disabled">
-                                                <i class="fa-solid fa-chevron-up"></i>
-                                            </div>
-                                        {% endif %}
-                                        
-                                        <div class="fw-bold text-{{ 'success' if request.score > 0 else 'danger' if request.score < 0 else 'muted' }}">
-                                            {{ request.score }}
-                                        </div>
-                                        
-                                        {% if logged_in_user and not is_owner and username %}
-                                            <form method="POST" action="{{ url_for('feature_requests.vote_feature_request', username=username) }}" class="d-inline">
-                                                <input type="hidden" name="request_id" value="{{ request.id }}">
-                                                <input type="hidden" name="vote_type" value="downvote">
-                                                <button type="submit" class="btn btn-sm {{ 'btn-danger' if request.user_vote == -1 else 'btn-outline-danger' }} mt-1">
-                                                    <i class="fa-solid fa-chevron-down"></i>
-                                                </button>
-                                            </form>
-                                        {% else %}
-                                            <div class="btn btn-sm btn-outline-danger mt-1 disabled">
-                                                <i class="fa-solid fa-chevron-down"></i>
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                    
-                                    <!-- Content Section -->
-                                    <div class="col-md-11 col-10">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="flex-grow-1">
-                                                <h6 class="card-title mb-1">{{ request.title }}</h6>
-                                                <p class="card-text small">{{ request.description }}</p>
-                                                <small class="text-muted">
-                                                    {{ feature_requests_by }} 
-                                                    {% if request.author_display == "admin" %}
-                                                        <span class="badge bg-warning text-dark">
-                                                            <i class="fa-solid fa-crown"></i> admin
-                                                        </span>
-                                                    {% else %}
-                                                    <span class="badge bg-primary text-white">
-                                                        {{ request.author_display }}
-                                                    </span>
-                                                    {% endif %}
-                                                     • 
-                                                    {% if request.created %}
-                                                        {{ request.created.strftime('%Y-%m-%d %H:%M') }}
-                                                    {% else %}
-                                                        {{ feature_requests_unknown }}
-                                                    {% endif %}
-                                                </small>
-                                            </div>
-                                            
-                                            <div class="ms-3 d-flex flex-column align-items-end">
-                                                {% if request.status == 'open' %}
-                                                    <span class="badge bg-primary mb-2">{{ feature_requests_status_open }}</span>
-                                                {% elif request.status == 'working_on_it' %}
-                                                    <span class="badge bg-warning mb-2">{{ feature_requests_status_working }}</span>
-                                                {% elif request.status == 'completed' %}
-                                                    <span class="badge bg-success mb-2">{{ feature_requests_status_completed }}</span>
-                                                {% elif request.status == 'not_doing' %}
-                                                    <span class="badge bg-secondary mb-2">{{ feature_requests_status_not_doing }}</span>
-                                                {% endif %}
-                                                
-                                                {% if logged_in_user and username and (is_owner or request.author_display == logged_in_user) %}
-                                                    <div class="btn-group btn-group-sm">
-                                                        <button type="button" class="btn btn-outline-secondary" 
-                                                                onclick="editRequest({{ request.id }}, '{{ request.title|e }}', '{{ request.description|e }}')">
-                                                            <i class="fa-solid fa-edit"></i>
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline-danger" 
-                                                                onclick="deleteRequest({{ request.id }}, '{{ request.title|e }}')">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="mt-2">
-                                            <small class="text-muted">
-                                                <a href="#" class="text-decoration-none" onclick="showVoters({{ request.id }})">
-                                                    <i class="fa-solid fa-chevron-up text-success"></i> {{ request.upvotes }} 
-                                                    <i class="fa-solid fa-chevron-down text-danger ms-2"></i> {{ request.downvotes }}
-                                                </a>
-                                            </small>
-                                            
-                                            {% if is_owner %}
-                                            <div class="mt-2">
-                                                <form method="POST" action="{{ url_for('feature_requests.update_feature_request_status', username=username) }}" class="d-inline">
-                                                    <input type="hidden" name="request_id" value="{{ request.id }}">
-                                                    <select name="status" class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
-                                                        <option value="open" {{ 'selected' if request.status == 'open' else '' }}>{{ feature_requests_status_open }}</option>
-                                                        <option value="working_on_it" {{ 'selected' if request.status == 'working_on_it' else '' }}>{{ feature_requests_status_working }}</option>
-                                                        <option value="completed" {{ 'selected' if request.status == 'completed' else '' }}>{{ feature_requests_status_completed }}</option>
-                                                        <option value="not_doing" {{ 'selected' if request.status == 'not_doing' else '' }}>{{ feature_requests_status_not_doing }}</option>
-                                                    </select>
-                                                </form>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
+                                <h6 class="card-title mb-1">
+                                    <a href="{{ url_for('feature_requests.single_feature_request', request_id=request.id) }}" class="text-decoration-none">
+                                        {{ request.title }}
+                                    </a>
+                                </h6>
+                                <p class="card-text small">{{ request.description[:150] }}{% if request.description|length > 150 %}...{% endif %}</p>
+                                <small class="text-muted">Score: {{ request.score }} • {{ request.created.strftime('%Y-%m-%d') if request.created }}</small>
                             </div>
                         </div>
                         {% endfor %}

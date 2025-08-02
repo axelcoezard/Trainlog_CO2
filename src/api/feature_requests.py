@@ -18,16 +18,28 @@ def feature_requests(username=None):
     userinfo = session.get("userinfo", {})
     current_user = userinfo.get("logged_in_user")
     
+    # Get sort parameter (default to score)
+    sort_by = request.args.get('sort', 'score')
+    
     with pg_session() as pg:
         if current_user:
             # Get requests with user's votes
-            result = pg.execute(
-                fr_sql.list_feature_requests_with_votes(),
-                {"username": current_user}
-            ).fetchall()
+            if sort_by == 'date':
+                result = pg.execute(
+                    fr_sql.list_feature_requests_with_votes_by_date(),
+                    {"username": current_user}
+                ).fetchall()
+            else:
+                result = pg.execute(
+                    fr_sql.list_feature_requests_with_votes(),
+                    {"username": current_user}
+                ).fetchall()
         else:
             # Get requests without user votes
-            result = pg.execute(fr_sql.list_feature_requests()).fetchall()
+            if sort_by == 'date':
+                result = pg.execute(fr_sql.list_feature_requests_by_date()).fetchall()
+            else:
+                result = pg.execute(fr_sql.list_feature_requests()).fetchall()
         
         # Convert to list of dictionaries
         request_list = []
@@ -51,13 +63,64 @@ def feature_requests(username=None):
             logger.info(f"Feature request: ID={req[0]}, Title={req[1]}")
             request_list.append(request_dict)
 
-            from pprint import pprint
-            pprint(userinfo)
-
     return render_template(
         'feature_requests.html',
         username=current_user,
         requests=request_list,
+        current_sort=sort_by,
+        **lang.get(userinfo.get("lang", "en"), {}),
+        **userinfo,
+        nav="bootstrap/navigation.html" if current_user != "public" else "bootstrap/no_user_nav.html",
+        isCurrent=isCurrentTrip(getUser()) if current_user != "public" else False
+    )
+
+
+@feature_requests_blueprint.route("/feature_requests/<int:request_id>")
+def single_feature_request(request_id):
+    """Display a single feature request page"""
+    userinfo = session.get("userinfo", {})
+    current_user = userinfo.get("logged_in_user")
+    
+    with pg_session() as pg:
+        if current_user:
+            # Get request with user's vote
+            result = pg.execute(
+                fr_sql.get_single_feature_request_with_vote(),
+                {"request_id": request_id, "username": current_user}
+            ).fetchone()
+        else:
+            # Get request without user vote
+            result = pg.execute(
+                fr_sql.get_single_feature_request(),
+                {"request_id": request_id}
+            ).fetchone()
+        
+        if not result:
+            return render_template('404.html'), 404
+        
+        # Convert to dictionary
+        if result[3] == owner:
+            author_display = 'admin'
+        else:
+            author_display = result[3]
+            
+        request_dict = {
+            'id': result[0],
+            'title': result[1],
+            'description': result[2],
+            'author_display': author_display,
+            'status': result[4],
+            'created': result[5],
+            'upvotes': result[6],
+            'downvotes': result[7],
+            'score': result[8],
+            'user_vote': result[9] if len(result) > 9 else 0
+        }
+
+    return render_template(
+        'single_feature_request.html',
+        username=current_user,
+        request=request_dict,
         **lang.get(userinfo.get("lang", "en"), {}),
         **userinfo,
         nav="bootstrap/navigation.html" if current_user != "public" else "bootstrap/no_user_nav.html",
@@ -85,14 +148,19 @@ def submit_feature_request(username):
     current_user = session["userinfo"]["logged_in_user"]
     
     with pg_session() as pg:
-        pg.execute(
+        result = pg.execute(
             fr_sql.insert_feature_request(),
             {
                 "title": title,
                 "description": description,
                 "username": current_user
             }
-        )
+        ).fetchone()
+        
+        # Redirect to the new feature request page
+        if result:
+            new_id = result[0]
+            return redirect(url_for("feature_requests.single_feature_request", request_id=new_id))
     
     return redirect(url_for("feature_requests.feature_requests"))
 
@@ -130,7 +198,7 @@ def edit_feature_request(username):
             }
         )
     
-    return redirect(url_for("feature_requests.feature_requests"))
+    return redirect(url_for("feature_requests.single_feature_request", request_id=request_id))
 
 
 @feature_requests_blueprint.route("/<username>/feature_requests/delete", methods=["POST"])
@@ -239,6 +307,11 @@ def vote_feature_request(username):
             {"request_id": request_id}
         )
     
+    # Check if we came from single request page
+    referer = request.headers.get('Referer', '')
+    if f'/feature_requests/{request_id}' in referer:
+        return redirect(url_for("feature_requests.single_feature_request", request_id=request_id))
+    
     return redirect(url_for("feature_requests.feature_requests"))
 
 
@@ -254,6 +327,11 @@ def update_feature_request_status(username):
             fr_sql.update_feature_request_status(),
             {"request_id": request_id, "status": new_status}
         )
+    
+    # Check if we came from single request page
+    referer = request.headers.get('Referer', '')
+    if f'/feature_requests/{request_id}' in referer:
+        return redirect(url_for("feature_requests.single_feature_request", request_id=request_id))
     
     return redirect(url_for("feature_requests.feature_requests"))
 
