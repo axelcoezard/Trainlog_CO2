@@ -5669,7 +5669,7 @@ def get_trips_api_internal(username, is_public=False):
     start = request.form.get("start", type=int, default=0)
     length = request.form.get("length", type=int, default=10)
     search_value = request.form.get("search[value]", default="")
-    draw = request.form.get("draw", type=int, default=1)  # For DataTables response
+    draw = request.form.get("draw", type=int, default=1)
     past = int(request.args.get("projects") == "False")
     filter_types = request.form.get("filterTypes", type=int, default=0)
 
@@ -5678,15 +5678,12 @@ def get_trips_api_internal(username, is_public=False):
         filter_types = 1
 
     # Sorting parameters
-    sort_column = request.form.get(
-        "order[0][column]", type=int, default=3
-    )  # Default sort column
-    sort_direction = request.form.get(
-        "order[0][dir]", default="desc" if past == 1 else "asc"
-    )  # Default sort direction
+    sort_column = request.form.get("order[0][column]", type=int, default=3)
+    sort_direction = request.form.get("order[0][dir]", default="desc" if past == 1 else "asc")
+    
     column_names = [
         "type",
-        "origin_station",
+        "origin_station", 
         "destination_station",
         "start_datetime",
         "start_time",
@@ -5698,28 +5695,130 @@ def get_trips_api_internal(username, is_public=False):
         "line_name",
         "countries",
         "price",
+        "material_type",
+        "reg",
+        "seat",
+        "notes"
     ]
+    
     sort_column_name = (
         column_names[sort_column]
         if 0 <= sort_column < len(column_names)
         else "default_column_name"
     )
 
-    count_query = getDynamicUserTrips + "SELECT COUNT(*) FROM FilteredTrips"
+    # Handle column-specific searches
+    column_searches = {}
+    for i in range(20):  # Check up to 20 columns
+        column_search = request.form.get(f"columns[{i}][search][value]", "")
+        column_exact = request.form.get(f"columns[{i}][search][exact]", "false") == "true"
+        if column_search:
+            column_searches[i] = {"value": column_search, "exact": column_exact}
+
+    # Build additional WHERE conditions for column-specific searches
+    additional_conditions = []
+    search_params = {"username": username, "past": past, "search": f"%{search_value}%"}
+    
+    # Add column-specific search conditions
+    for column_index, search_data in column_searches.items():
+        if column_index < len(column_names):
+            column_name = column_names[column_index]
+            param_name = f"col_search_{column_index}"
+            search_term = search_data["value"]
+            is_exact = search_data["exact"]
+            
+            # Choose LIKE pattern based on exact/partial matching
+            if is_exact:
+                search_pattern = search_term  # Exact match
+            else:
+                search_pattern = f"%{search_term}%"  # Partial match
+            
+            # Map frontend column names to actual query column names in FilteredTrips
+            if column_name == "type":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(type) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(type)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "origin_station":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(origin_station) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(origin_station)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "destination_station":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(destination_station) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(destination_station)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "start_datetime":
+                if is_exact:
+                    additional_conditions.append(f"DATE(start_datetime) = :{param_name}")
+                else:
+                    additional_conditions.append(f"DATE(start_datetime) LIKE :{param_name}")
+            elif column_name == "operator":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(operator) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(operator)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "line_name":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(line_name) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(line_name)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "countries":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(countries) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(countries)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "material_type":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(material_type) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(material_type)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "reg":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(reg) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(reg)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            elif column_name == "notes":
+                if is_exact:
+                    additional_conditions.append(f"LOWER(notes) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER(notes)) LIKE remove_diacritics(LOWER(:{param_name}))")
+            else:
+                # Fallback for other columns
+                if is_exact:
+                    additional_conditions.append(f"LOWER({column_name}) = LOWER(:{param_name})")
+                else:
+                    additional_conditions.append(f"remove_diacritics(LOWER({column_name})) LIKE remove_diacritics(LOWER(:{param_name}))")
+            
+            search_params[param_name] = search_pattern
+
+    # Build the queries
+    base_count_query = getDynamicUserTrips + "SELECT COUNT(*) FROM FilteredTrips"
+    base_data_query = getDynamicUserTrips + "SELECT * FROM FilteredTrips"
+    
+    # Add type filtering if needed
     if filter_types:
-        count_query += " WHERE type IN ('train', 'bus', 'air', 'ferry', 'helicopter', 'aerialway', 'tram', 'metro')"
-    if sort_column_name != "start_datetime":
-        data_query = getDynamicUserTrips + " SELECT * FROM FilteredTrips"
-        if filter_types:
-            data_query += " WHERE type IN ('train', 'bus', 'air', 'ferry', 'helicopter', 'aerialway', 'tram', 'metro')"
-        data_query += (
-            f" ORDER BY {sort_column_name} {sort_direction} LIMIT :limit OFFSET :offset"
-        )
+        base_count_query += " WHERE type IN ('train', 'bus', 'air', 'ferry', 'helicopter', 'aerialway', 'tram', 'metro')"
+        base_data_query += " WHERE type IN ('train', 'bus', 'air', 'ferry', 'helicopter', 'aerialway', 'tram', 'metro')"
+        
+        # Add column-specific conditions
+        if additional_conditions:
+            base_count_query += " AND " + " AND ".join(additional_conditions)
+            base_data_query += " AND " + " AND ".join(additional_conditions)
     else:
-        data_query = getDynamicUserTrips + " SELECT * FROM FilteredTrips"
-        if filter_types:
-            data_query += " WHERE type IN ('train', 'bus', 'air', 'ferry', 'helicopter', 'aerialway', 'tram', 'metro')"
-        data_query += f" ORDER BY utc_filtered_start_datetime = 1 {sort_direction}, utc_filtered_start_datetime {sort_direction}, uid {sort_direction} LIMIT :limit OFFSET :offset"
+        # Add column-specific conditions
+        if additional_conditions:
+            base_count_query += " WHERE " + " AND ".join(additional_conditions)
+            base_data_query += " WHERE " + " AND ".join(additional_conditions)
+
+    count_query = base_count_query
+    
+    # Add sorting to data query
+    if sort_column_name != "start_datetime":
+        data_query = base_data_query + f" ORDER BY {sort_column_name} {sort_direction} LIMIT :limit OFFSET :offset"
+    else:
+        data_query = base_data_query + f" ORDER BY utc_filtered_start_datetime = 1 {sort_direction}, utc_filtered_start_datetime {sort_direction}, uid {sort_direction} LIMIT :limit OFFSET :offset"
 
     mainConn.create_function("remove_diacritics", 1, remove_diacritics)
 
@@ -5729,23 +5828,15 @@ def get_trips_api_internal(username, is_public=False):
 
     with managed_cursor(mainConn) as cursor:
         # Fetch filtered count
-        cursor.execute(
-            count_query,
-            {"username": username, "search": f"%{search_value}%", "past": past},
-        )
+        cursor.execute(count_query, search_params)
         records_filtered = cursor.fetchone()[0]
 
         # Fetch the actual page data
-        cursor.execute(
-            data_query,
-            {
-                "username": username,
-                "search": f"%{search_value}%",
-                "limit": length,
-                "offset": start,
-                "past": past,
-            },
-        )
+        search_params.update({
+            "limit": length,
+            "offset": start
+        })
+        cursor.execute(data_query, search_params)
         trips = cursor.fetchall()
 
     # Convert trips to list of dictionaries

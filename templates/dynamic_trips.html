@@ -460,99 +460,121 @@ var table = $('#tripRows');
 
     var scroll = new URLSearchParams(window.location.search).get('scroll') === 'true'
     var tableObject = $('#dataTable').DataTable({
-        processing: true,
-        serverSide: true,
-        scrollY: scroll == true ? $(window).height() - 300 : null,
-        scroller: scroll,
-        dom: '<"toolbar">lfrtip',
-        ajax: {
-            url: '{{ url_for("get_trips_api" if not isPublic else "get_trips_api_public", username=username, projects=projects) }}',
-            "type": "POST",
-            "data": function(d) {
-                d.filterTypes = $('#filterTypeSwitch').is(':checked') ? 0 : 1;
-            }
-        },
-        columns: [
-            { data: 'type', render: renderType },
-            { data: 'origin_station', render: renderStation },
-            { data: 'destination_station', render: renderStation },
-            { data: 'start_date' },
-            { data: 'start_time' },
-            { data: 'end_time' },
-            { data: 'trip_duration', render: renderDuration },
-            { data: 'trip_length', render: renderLength },
-            {
-                data: null, // Explicitly indicate no specific data field
-                render: renderSpeed,
-                defaultContent: "N/A", // Default content if no data is available
-                orderable: true // Allowing ordering based on computed speed
-            },
-            { data: 'operator', render: renderOperators },
-            { data: 'line_name' },
-            { data: 'countries', render: renderFlags },
-            {% if not isPublic %}
-            {
-                data: null,
-                render: renderPrices,
-                defaultContent: "",
-            },
-            {% endif %}
-            {
-                data: null,
-                render: renderMaterialType,
-                defaultContent: "",
-            },
-            { data: 'reg' },
-            { data: 'seat' },
-            { data: 'notes' },
-            { data: 'tags' },
-            {
-                data: null,
-                render: renderButton
-            },
-        ],
-        rowId: 'id',
-        stateSave: false,
-        language: {
-            info: "{{dtInfo}}",
-            paginate: {
-                next: "{{dtNext}}",
-                previous: "{{dtPrevious}}",
-            },
-            emptyTable: "{{dtEmptyTable}}",
-            select: {
-                rows: {
-                    "_": "{{dtMultipleLineSelected}}",
-                    "0": "",
-                    "1": "{{dtOneLineSelected}}"
-                },
-            },
-            lengthMenu: "{{dtLengthMenu}}",
-            search: "{{dtSearch}}"
-        },
-        createdRow: function(row, data, dataIndex) {
-            $(row).attr('id', data.uid).attr("origDest", `${data.origin_station} - ${data.destination_station}`);
-        },
-        order: [],
-        lengthMenu: [[10, 50, 100, -1], [10, 50, 100, "{{dtAll}}"]],
-        paging: true,
-        select: {
-            style: 'multi+shift',
-            selector: 'td:not(:nth-child(2)):not(:last-child):not(:first-child)'
-        },
-        rowId: function(a) {
-            return a.id;
-        },
-        pagingType: $(window).width() < 768 ? "numbers" : "simple_numbers",
-        responsive: {
-            details: {
-                renderer: function(api, rowIdx, columns) {
-                    var data = processHiddenData(rowIdx, columns);
-                    return data ? $('<table/>').append(data) : false;
-                }
+    processing: true,
+    serverSide: true,
+    scrollY: scroll == true ? $(window).height() - 300 : null,
+    scroller: scroll,
+    dom: '<"toolbar">lfrtip',
+    ajax: {
+        url: '{{ url_for("get_trips_api" if not isPublic else "get_trips_api_public", username=username, projects=projects) }}',
+        "type": "POST",
+        "data": function(d) {
+            d.filterTypes = $('#filterTypeSwitch').is(':checked') ? 0 : 1;
+            
+            // Parse smart search
+            const searchValue = d.search.value || '';
+            const { columnFilters, globalSearch } = parseSmartSearch(searchValue);
+            
+            // Set global search to the non-prefixed terms
+            d.search.value = globalSearch;
+            
+            // Add column-specific searches
+            if (d.columns) {
+                d.columns.forEach((column, index) => {
+                    if (columnFilters[index]) {
+                        column.search = {
+                            value: columnFilters[index].value,
+                            regex: false
+                        };
+                        // Add exact flag as a separate parameter
+                        d[`columns[${index}][search][exact]`] = columnFilters[index].isExact ? 'true' : 'false';
+                    }
+                });
             }
         }
-    }).on('responsive-display', function(e, datatable, row, showHide, update) {
+    },
+    // ... rest of your existing configuration stays the same
+    columns: [
+        { data: 'type', render: renderType },
+        { data: 'origin_station', render: renderStation },
+        { data: 'destination_station', render: renderStation },
+        { data: 'start_date' },
+        { data: 'start_time' },
+        { data: 'end_time' },
+        { data: 'trip_duration', render: renderDuration },
+        { data: 'trip_length', render: renderLength },
+        {
+            data: null,
+            render: renderSpeed,
+            defaultContent: "N/A",
+            orderable: true
+        },
+        { data: 'operator', render: renderOperators },
+        { data: 'line_name' },
+        { data: 'countries', render: renderFlags },
+        {% if not isPublic %}
+        {
+            data: null,
+            render: renderPrices,
+            defaultContent: "",
+        },
+        {% endif %}
+        {
+            data: null,
+            render: renderMaterialType,
+            defaultContent: "",
+        },
+        { data: 'reg' },
+        { data: 'seat' },
+        { data: 'notes' },
+        { data: 'tags' },
+        {
+            data: null,
+            render: renderButton
+        },
+    ],
+    rowId: 'id',
+    stateSave: false,
+    language: {
+        info: "{{dtInfo}}",
+        paginate: {
+            next: "{{dtNext}}",
+            previous: "{{dtPrevious}}",
+        },
+        emptyTable: "{{dtEmptyTable}}",
+        select: {
+            rows: {
+                "_": "{{dtMultipleLineSelected}}",
+                "0": "",
+                "1": "{{dtOneLineSelected}}"
+            },
+        },
+        lengthMenu: "{{dtLengthMenu}}",
+        search: "{{dtSearch}}"
+    },
+    createdRow: function(row, data, dataIndex) {
+        $(row).attr('id', data.uid).attr("origDest", `${data.origin_station} - ${data.destination_station}`);
+    },
+    order: [],
+    lengthMenu: [[10, 50, 100, -1], [10, 50, 100, "{{dtAll}}"]],
+    paging: true,
+    select: {
+        style: 'multi+shift',
+        selector: 'td:not(:nth-child(2)):not(:last-child):not(:first-child)'
+    },
+    rowId: function(a) {
+        return a.id;
+    },
+    pagingType: $(window).width() < 768 ? "numbers" : "simple_numbers",
+    responsive: {
+        details: {
+            renderer: function(api, rowIdx, columns) {
+                var data = processHiddenData(rowIdx, columns);
+                return data ? $('<table/>').append(data) : false;
+            }
+        }
+    }
+}).on('responsive-display', function(e, datatable, row, showHide, update) {
     resetObjects();
 }).on('draw', function() {
     tableObject.rows().every(function(rowIdx, tableLoop, rowLoop) {
@@ -922,6 +944,57 @@ $('#submitBtn').on('click', function() {
         return null;
     }
 
+    const SEARCH_PREFIXES = {
+        'type:': 0,
+        'from:': 1,
+        'to:': 2,
+        'date:': 3,
+        'operator:': 9,
+        'line:': 10,
+        'country:': 11,
+        'reg:': 14,
+        'notes:': 16
+    };
+
+    // Parse search query for prefixes
+    function parseSmartSearch(searchValue) {
+        const columnFilters = {};
+        let globalSearch = '';
+        
+        // Split by spaces but keep quoted strings together
+        const terms = searchValue.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+        
+        terms.forEach(term => {
+            let matched = false;
+            
+            // Check for prefix matches
+            for (const [prefix, columnIndex] of Object.entries(SEARCH_PREFIXES)) {
+                if (term.toLowerCase().startsWith(prefix)) {
+                    let value = term.substring(prefix.length);
+                    let isExact = false;
+                    
+                    // Check if the value is quoted for exact matching
+                    if (value.startsWith('"') && value.endsWith('"') && value.length > 1) {
+                        value = value.slice(1, -1); // Remove quotes
+                        isExact = true;
+                    }
+                    
+                    if (value) {
+                        columnFilters[columnIndex] = { value, isExact };
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If no prefix matched, add to global search
+            if (!matched) {
+                globalSearch += (globalSearch ? ' ' : '') + term;
+            }
+        });
+        
+        return { columnFilters, globalSearch };
+    }
     // Initialize the switch based on the cookie state
     $(document).ready(function () {
         const savedState = getCookie('filterTypeSwitch') === 'true';
