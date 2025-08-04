@@ -84,7 +84,6 @@ logger = logging.getLogger(__name__)
 from py import geopip_country
 from py.currency import get_available_currencies, get_exchange_rate
 from py.db_init import init_data, init_main
-from py.finances import get_finances
 from py.g_search import get_vessel_picture
 from py.image_generator import generate_image
 from py.sql import (
