@@ -7,8 +7,108 @@
     .ui-front {
         z-index: 9999999 !important;
     }
-</style>
+    .search-container {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
 
+    .search-help-icon {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        cursor: pointer;
+        z-index: 10;
+    }
+
+    .search-help-icon:hover {
+        color: #495057;
+    }
+
+    .dataTables_filter {
+        position: relative;
+    }
+
+    .dataTables_filter input {
+        padding-right: 35px !important;
+    }
+
+    .search-help-content {
+        max-width: 500px;
+    }
+
+    .search-example {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+    .search-help-content{
+        max-width: 800px;
+    }
+</style>
+<div class="modal fade" id="smartSearchHelpModal" tabindex="-1" role="dialog" aria-labelledby="smartSearchHelpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="smartSearchHelpModalLabel">
+                    <i class="fas fa-search me-2"></i>{{smart_search_title}}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body search-help-content">
+                <p class="mb-3">{{smart_search_description}}</p>
+                
+                <div class="row mb-3">
+                    <div class="col-md-7">
+                        <h6 class="fw-bold mb-2">{{smart_search_prefixes_title}}</h6>
+                        <div class="small" style="font-family: monospace;">
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>type:</code></span> <span>{{smart_search_type}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>from:</code></span> <span>{{smart_search_from}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>to:</code></span> <span>{{smart_search_to}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>date:</code></span> <span>{{smart_search_date}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>operator:</code></span> <span>{{smart_search_operator}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>line:</code></span> <span>{{smart_search_line}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>country:</code></span> <span>{{smart_search_country}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>material:</code></span> <span>{{smart_search_material}}</span></div>
+                            <div class="d-flex mb-1"><span style="width: 100px; flex-shrink: 0;"><code>reg:</code></span> <span>{{smart_search_reg}}</span></div>
+                            <div class="d-flex"><span style="width: 100px; flex-shrink: 0;"><code>notes:</code></span> <span>{{smart_search_notes}}</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <h6 class="fw-bold mb-2">{{smart_search_quotes_title}}</h6>
+                        <div class="small">
+                            <div class="mb-2">
+                                <strong>"text"</strong> - {{smart_search_double_quotes_desc}}
+                            </div>
+                            <div>
+                                <strong>'text'</strong> - {{smart_search_single_quotes_desc}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold mb-2">{{smart_search_examples_title}}</h6>
+                <div class="search-example">from:"Oslo Central" type:train</div>
+                <small class="text-muted d-block mb-2">{{smart_search_example_spaces_desc}}</small>
+                
+                <div class="search-example">from:'Oslo Central' to:'Stockholm'</div>
+                <small class="text-muted d-block mb-2">{{smart_search_example_exact_desc}}</small>
+                
+                <div class="search-example">from:Oslo express date:2024-01-15</div>
+                <small class="text-muted d-block">{{smart_search_example_mixed_desc}}</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{close}}</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div id="preload" class="d-none"></div>
 
 <div class="multiLink">
@@ -963,7 +1063,8 @@ $('#submitBtn').on('click', function() {
         let globalSearch = '';
         
         // Split by spaces but keep quoted strings together
-        const terms = searchValue.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+        // This regex handles both double quotes (") and single quotes (')
+        const terms = searchValue.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
         
         terms.forEach(term => {
             let matched = false;
@@ -974,10 +1075,15 @@ $('#submitBtn').on('click', function() {
                     let value = term.substring(prefix.length);
                     let isExact = false;
                     
-                    // Check if the value is quoted for exact matching
-                    if (value.startsWith('"') && value.endsWith('"') && value.length > 1) {
+                    // Double quotes = exact match
+                    if (value.startsWith("'") && value.endsWith("'") && value.length > 1) {
                         value = value.slice(1, -1); // Remove quotes
                         isExact = true;
+                    }
+                    // Single quotes = partial match with spaces
+                    else if (value.startsWith('"') && value.endsWith('"') && value.length > 1) {
+                        value = value.slice(1, -1); // Remove quotes
+                        isExact = false; // Partial match
                     }
                     
                     if (value) {
@@ -990,7 +1096,13 @@ $('#submitBtn').on('click', function() {
             
             // If no prefix matched, add to global search
             if (!matched) {
-                globalSearch += (globalSearch ? ' ' : '') + term;
+                // Handle quotes in global search too
+                let cleanTerm = term;
+                if ((term.startsWith('"') && term.endsWith('"')) || 
+                    (term.startsWith("'") && term.endsWith("'"))) {
+                    cleanTerm = term.slice(1, -1);
+                }
+                globalSearch += (globalSearch ? ' ' : '') + cleanTerm;
             }
         });
         
@@ -1001,6 +1113,17 @@ $('#submitBtn').on('click', function() {
         const savedState = getCookie('filterTypeSwitch') === 'true';
         document.getElementById('filterTypeSwitch').checked = savedState;
         toggleTypeFilter();
+        setTimeout(function() {
+            var searchContainer = $('.dataTables_filter');
+            if (searchContainer.length && !searchContainer.find('.search-help-icon').length) {
+                searchContainer.css('position', 'relative');
+                var helpIcon = $('<i class="fas fa-info-circle search-help-icon" data-bs-toggle="modal" data-bs-target="#smartSearchHelpModal"></i>');
+                searchContainer.append(helpIcon);
+                
+                // Adjust input padding
+                searchContainer.find('input').css('padding-right', '35px');
+            }
+        }, 100);
     });
 
 </script>
