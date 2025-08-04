@@ -5726,7 +5726,7 @@ def get_trips_api_internal(username, is_public=False):
             param_name = f"col_search_{column_index}"
             search_term = search_data["value"]
             is_exact = search_data["exact"]
-            
+
             # Choose LIKE pattern based on exact/partial matching
             if is_exact:
                 search_pattern = search_term  # Exact match
@@ -5771,9 +5771,9 @@ def get_trips_api_internal(username, is_public=False):
                     additional_conditions.append(f"remove_diacritics(LOWER(countries)) LIKE remove_diacritics(LOWER(:{param_name}))")
             elif column_name == "material_type":
                 if is_exact:
-                    additional_conditions.append(f"LOWER(material_type) = LOWER(:{param_name})")
+                    additional_conditions.append(f"(LOWER(material_type) = LOWER(:{param_name}) OR LOWER(iata) = LOWER(:{param_name}) OR LOWER(manufacturer) = LOWER(:{param_name}) OR LOWER(model) = LOWER(:{param_name}))")
                 else:
-                    additional_conditions.append(f"remove_diacritics(LOWER(material_type)) LIKE remove_diacritics(LOWER(:{param_name}))")
+                    additional_conditions.append(f"(remove_diacritics(LOWER(material_type)) LIKE remove_diacritics(LOWER(:{param_name})) OR remove_diacritics(LOWER(iata)) LIKE remove_diacritics(LOWER(:{param_name})) OR remove_diacritics(LOWER(manufacturer)) LIKE remove_diacritics(LOWER(:{param_name})) OR remove_diacritics(LOWER(model)) LIKE remove_diacritics(LOWER(:{param_name})))")
             elif column_name == "reg":
                 if is_exact:
                     additional_conditions.append(f"LOWER(reg) = LOWER(:{param_name})")
