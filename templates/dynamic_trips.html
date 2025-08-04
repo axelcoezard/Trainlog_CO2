@@ -1109,17 +1109,21 @@ $('#submitBtn').on('click', function() {
         return { columnFilters, globalSearch };
     }
     // Initialize the switch based on the cookie state
-    $(document).ready(function () {
-        const savedState = getCookie('filterTypeSwitch') === 'true';
-        document.getElementById('filterTypeSwitch').checked = savedState;
-        toggleTypeFilter();
+   $(document).ready(function () {
+        const filterSwitch = document.getElementById('filterTypeSwitch');
+        if (filterSwitch) {
+            const savedState = (typeof getCookie === 'function' && getCookie('filterTypeSwitch') === 'true');
+            filterSwitch.checked = savedState;
+            toggleTypeFilter();
+        }
+
         setTimeout(function() {
             var searchContainer = $('.dataTables_filter');
             if (searchContainer.length && !searchContainer.find('.search-help-icon').length) {
                 searchContainer.css('position', 'relative');
                 var helpIcon = $('<i class="fas fa-info-circle search-help-icon" data-bs-toggle="modal" data-bs-target="#smartSearchHelpModal"></i>');
                 searchContainer.append(helpIcon);
-                
+
                 // Adjust input padding
                 searchContainer.find('input').css('padding-right', '35px');
             }
