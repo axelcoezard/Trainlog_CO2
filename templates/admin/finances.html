@@ -6,18 +6,18 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5"></script>
 
 <div class="container mt-4">
-    <h2>Monthly Trainlog's Finances</h2>
-    <div id="financeChart" style="width: 100%; height: 500px;"></div>
-</div>
-
-<!-- Displaying Totals Below the Chart using Bootstrap 5 cards -->
-<div class="container mt-4">
-     <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Monthly Trainlog's Finances</h2>
         <a href="{{ url_for('finance.manage') }}" class="btn btn-outline-success">
             <i class="fas fa-cog"></i> Manage Expenses
         </a>
     </div>
+    
+    <div id="financeChart" style="width: 100%; height: 500px;"></div>
+</div>
+
+<!-- Displaying Totals Below the Chart using Bootstrap 5 cards -->
+<div class="container mt-4">
     <div class="row text-center">
         <div class="col-md-4 mb-3">
             <div class="card shadow-sm border-primary">
@@ -53,14 +53,6 @@
                 </div>
             </div>
         </div>
-        <!-- <div class="col-md-3 mb-3">
-            <div class="card shadow-sm border-danger">
-                <div class="card-body">
-                    <h5 class="card-title text-danger">API Topups</h5>
-                    <p class="card-text">{{ totals['api_topup_spending'] }} €</p>
-                </div>
-            </div>
-        </div> -->
         <div class="col-md-4 mb-3">
             <div class="card shadow-sm border-danger">
                 <div class="card-body">
@@ -112,6 +104,9 @@
     var totalSpendingDataPoints = {{ total_spending_data_points | tojson }};
     var profitDataPoints = {{ profit_data_points | tojson }};
     
+    // Outstanding info for visual indicators
+    var outstandingInfo = {{ outstanding_info | tojson if outstanding_info else 'null' }};
+    
     // Calculate cumulative profit
     var cumulativeProfitDataPoints = [];
     profitDataPoints.reduce((acc, current, index) => {
@@ -121,8 +116,52 @@
     }, 0);
 
     // Find the indices for the default zoom range
-    var endIndex = labels.length - 1; // Set to the last index
-    var startIndex = endIndex - 11; // Set to the last index minus 11 for a 12-month view
+    var endIndex = labels.length - 1;
+    var startIndex = endIndex - 11;
+
+    // Create series data with outstanding indicators (lighter shade for pending revenue)
+    var revenueSeriesData = revenueDataPoints.map((value, index) => {
+        var item = { value: value };
+        
+        // Add visual indicator for months with outstanding revenue (lighter green)
+        if (outstandingInfo && outstandingInfo.next_payout_date && outstandingInfo.total_pending > 0) {
+            var payoutMonth = outstandingInfo.next_payout_date.substr(0, 7); // Extract YYYY-MM
+            if (labels[index] === payoutMonth) {
+                // Calculate the portion that is outstanding vs already received
+                var baseRevenue = value - outstandingInfo.total_pending;
+                
+                // Split the bar into two parts: received (dark green) + pending (light green)
+                return [
+                    {
+                        value: baseRevenue,
+                        itemStyle: { color: '#4CAF50' } // Normal green for received revenue
+                    },
+                    {
+                        value: outstandingInfo.total_pending,
+                        itemStyle: { color: '#81C784' } // Light green for pending revenue
+                    }
+                ];
+            }
+        }
+        
+        return item;
+    });
+
+    // Flatten the revenue data for stacked display
+    var receivedRevenueData = [];
+    var pendingRevenueData = [];
+    
+    revenueSeriesData.forEach((item, index) => {
+        if (Array.isArray(item)) {
+            // Month with both received and pending revenue
+            receivedRevenueData.push(item[0].value);
+            pendingRevenueData.push(item[1].value);
+        } else {
+            // Month with only received revenue
+            receivedRevenueData.push(item.value);
+            pendingRevenueData.push(0);
+        }
+    });
 
     var option = {
         tooltip: {
@@ -135,14 +174,41 @@
             },
             formatter: function (params) {
                 var tooltipText = `<strong>${params[0].axisValue}</strong><br>`;
+                
+                // Group revenue items
+                var totalIncome = 0;
+                var pendingIncome = 0;
+                var otherItems = [];
+                
                 params.forEach(function (param) {
+                    if (param.seriesName === 'Received Income') {
+                        totalIncome += param.value;
+                    } else if (param.seriesName === 'Pending Income') {
+                        pendingIncome = param.value;
+                        totalIncome += param.value;
+                    } else {
+                        otherItems.push(param);
+                    }
+                });
+                
+                // Show combined income with breakdown if there's pending
+                if (pendingIncome > 0) {
+                    tooltipText += `<span style="color:#4CAF50">●</span> Total Income: ${totalIncome.toFixed(2)} €<br>`;
+                    tooltipText += `&nbsp;&nbsp;<span style="color:#81C784">○</span> <em>Pending: ${pendingIncome.toFixed(2)} €</em><br>`;
+                } else if (totalIncome > 0) {
+                    tooltipText += `<span style="color:#4CAF50">●</span> Income: ${totalIncome.toFixed(2)} €<br>`;
+                }
+                
+                // Show other items
+                otherItems.forEach(function (param) {
                     tooltipText += `${param.marker} ${param.seriesName}: ${param.value.toFixed(2)} €<br>`;
                 });
+                
                 return tooltipText;
             }
         },
         legend: {
-            data: ['Income', 'Hosting Spending', 'Translation Spending', 'API Subscriptions', 'API Topups', 'Net Result', 'Cumulative Profit'],
+            data: ['Received Income', 'Pending Income', 'Hosting Spending', 'Translation Spending', 'API Subscriptions', 'Net Result', 'Cumulative Profit'],
             top: 10,
             textStyle: {
                 color: '#333',
@@ -152,7 +218,7 @@
         grid: {
             left: '3%',
             right: '4%',
-            bottom: '15%', // Increased bottom space for the slider
+            bottom: '15%',
             containLabel: true
         },
         xAxis: {
@@ -189,23 +255,24 @@
         dataZoom: [
             {
                 type: 'slider',
-                startValue: startIndex, // Default zoom start
-                endValue: endIndex, // Default zoom end
-                bottom: '5%' // Positioning the slider a bit higher
+                startValue: startIndex,
+                endValue: endIndex,
+                bottom: '5%'
             },
             {
                 type: 'inside',
-                startValue: startIndex, // Default zoom start
-                endValue: endIndex // Default zoom end
+                startValue: startIndex,
+                endValue: endIndex
             }
         ],
         series: [
             {
-                name: 'Income',
+                name: 'Received Income',
                 type: 'bar',
-                data: revenueDataPoints,
+                stack: 'Income',
+                data: receivedRevenueData,
                 itemStyle: {
-                    color: '#4CAF50', // Green shade
+                    color: '#4CAF50', // Normal green
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -217,12 +284,29 @@
                 barCategoryGap: '30%'
             },
             {
+                name: 'Pending Income',
+                type: 'bar',
+                stack: 'Income',
+                data: pendingRevenueData,
+                itemStyle: {
+                    color: '#81C784', // Light green for pending
+                    shadowBlur: 1,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                },
+                emphasis: {
+                    itemStyle: {
+                        color: '#66BB6A'
+                    }
+                },
+                barCategoryGap: '30%'
+            },
+            {
                 name: 'Hosting Spending',
                 type: 'bar',
                 stack: 'Spending',
                 data: hostingSpendingDataPoints,
                 itemStyle: {
-                    color: '#F44336', // Red shade
+                    color: '#F44336',
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -239,7 +323,7 @@
                 stack: 'Spending',
                 data: translationSpendingDataPoints,
                 itemStyle: {
-                    color: '#FFCDD2', // Light red shade
+                    color: '#FFCDD2',
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -256,7 +340,7 @@
                 stack: 'Spending',
                 data: apiSubscriptionSpendingDataPoints,
                 itemStyle: {
-                    color: '#FF5722', // Deep orange shade
+                    color: '#FF5722',
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -267,29 +351,12 @@
                 },
                 barCategoryGap: '30%'
             },
-            // {
-            //     name: 'API Topups',
-            //     type: 'bar',
-            //     stack: 'Spending',
-            //     data: apiTopupSpendingDataPoints,
-            //     itemStyle: {
-            //         color: '#FFAB91', // Light orange shade
-            //         shadowBlur: 1,
-            //         shadowColor: 'rgba(0, 0, 0, 0.5)'
-            //     },
-            //     emphasis: {
-            //         itemStyle: {
-            //             color: '#FF8A65'
-            //         }
-            //     },
-            //     barCategoryGap: '30%'
-            // },
             {
                 name: 'Net Result',
                 type: 'line',
                 data: profitDataPoints,
                 itemStyle: {
-                    color: '#FF9800', // Orange shade
+                    color: '#FF9800',
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -308,7 +375,7 @@
                 type: 'line',
                 data: cumulativeProfitDataPoints,
                 itemStyle: {
-                    color: '#2196F3', // Blue shade
+                    color: '#2196F3',
                     shadowBlur: 1,
                     shadowColor: 'rgba(0, 0, 0, 0.5)'
                 },
@@ -329,9 +396,8 @@
     myChart.setOption(option);
 
     function exportData() {
-        // Prepare CSV data
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Date,Income,Hosting Spending,Translation Spending,API Subscriptions,API Topups,Net Result,Cumulative Profit\n";
+        csvContent += "Date,Income,Hosting Spending,Translation Spending,API Subscriptions,Net Result,Cumulative Profit\n";
         labels.forEach((label, index) => {
             let row = [
                 label,
@@ -339,24 +405,18 @@
                 hostingSpendingDataPoints[index],
                 translationSpendingDataPoints[index],
                 apiSubscriptionSpendingDataPoints[index],
-                // apiTopupSpendingDataPoints[index],
                 profitDataPoints[index],
                 cumulativeProfitDataPoints[index]
             ].join(",");
             csvContent += row + "\n";
         });
 
-        // Create a downloadable link
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
         link.setAttribute("download", "trainlog_finances.csv");
         document.body.appendChild(link);
-
-        // Trigger the download
         link.click();
-
-        // Remove the link after download
         document.body.removeChild(link);
     }
 </script>

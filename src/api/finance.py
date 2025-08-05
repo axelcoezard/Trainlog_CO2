@@ -5,28 +5,96 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 
 from src.finance import SimpleFinanceService, get_finances
 from src.utils import owner_required, getUser, lang
+from py.currency import get_exchange_rate
+from dateutil.relativedelta import relativedelta
+
 
 finance_blueprint = Blueprint('finance', __name__, url_prefix='/admin')
 
 @finance_blueprint.route("/finances")
 @owner_required
 def finances():
-    """Main finances dashboard with CHART - your original dashboard"""
+    """Main finances dashboard with CHART - now includes outstanding Stripe revenue"""
     try:
-        (
-            labels,
-            revenue_data_points,
-            hosting_spending_data_points,
-            translation_spending_data_points,
-            api_subscription_spending_data_points,
-            api_topup_spending_data_points,
-            total_spending_data_points,
-            profit_data_points,
-            totals,
-        ) = get_finances()
+        # Get outstanding Stripe info for display
+        outstanding_info = SimpleFinanceService.get_stripe_outstanding_balance()
+        
+        # Use the enhanced calculation that includes outstanding revenue
+        monthly_data = SimpleFinanceService.calculate_monthly_data_with_outstanding()
+        
+        # Get raw expenses for classification (same as before)
+        expenses = SimpleFinanceService.get_all_expenses()
+        
+        # Sort months and prepare data
+        sorted_months = sorted(monthly_data.keys())
+        
+        labels = sorted_months
+        revenue_data_points = [monthly_data[month]["revenue"] for month in sorted_months]
+        hosting_spending_data_points = [0] * len(sorted_months)
+        translation_spending_data_points = [0] * len(sorted_months)
+        api_subscription_spending_data_points = [0] * len(sorted_months)
+        api_topup_spending_data_points = [0] * len(sorted_months)  # Kept for compatibility
+        profit_data_points = [monthly_data[month]["profit"] for month in sorted_months]
+        
+        # Classify expenses (same logic as before)
+        for expense in expenses:
+            amount_eur = expense["amount"]
+            if expense["currency"] != "EUR":
+                conv_date = expense["expense_date"] if not expense["is_recurring"] else expense["start_date"]
+                amount_eur = get_exchange_rate(
+                    float(expense["amount"]), expense["currency"], "EUR", conv_date
+                )
+            
+            # Determine months impacted
+            months = []
+            if expense["is_recurring"] and expense["is_active"]:
+                start_date = expense["start_date"]
+                end_date = expense["end_date"] if expense["end_date"] else date.today()
+                current_date = start_date.replace(day=1)
+                while current_date <= end_date:
+                    months.append(current_date.strftime("%Y-%m"))
+                    current_date += relativedelta(months=1)
+            else:
+                months.append(expense["expense_date"].strftime("%Y-%m"))
+            
+            # Classify
+            name_lower = expense["name"].lower()
+            if "translation" in name_lower:
+                target = translation_spending_data_points
+            elif "ovh" in name_lower or "infomaniak" in name_lower:
+                target = hosting_spending_data_points
+            elif "api" in name_lower:
+                target = api_subscription_spending_data_points
+            else:
+                target = hosting_spending_data_points  # Default to hosting for compatibility
+            
+            for m in months:
+                if m in sorted_months:
+                    idx = sorted_months.index(m)
+                    target[idx] -= float(amount_eur)  # Negative for spending
+        
+        total_spending_data_points = [
+            h + t + a + api_topup
+            for h, t, a, api_topup in zip(
+                hosting_spending_data_points,
+                translation_spending_data_points,
+                api_subscription_spending_data_points,
+                api_topup_spending_data_points,
+            )
+        ]
+        
+        totals = {
+            "revenue": round(sum(revenue_data_points)),
+            "hosting_spending": round(sum(hosting_spending_data_points)),
+            "translation_spending": round(sum(translation_spending_data_points)),
+            "api_subscription_spending": round(sum(api_subscription_spending_data_points)),
+            "api_topup_spending": round(sum(api_topup_spending_data_points)),
+            "total_spending": round(-sum(total_spending_data_points)),  # convert back to positive
+            "profit": round(sum(profit_data_points)),
+        }
         
         return render_template(
-            "admin/finances.html",  # This should be your ORIGINAL chart template
+            "admin/finances.html",
             labels=labels,
             revenue_data_points=revenue_data_points,
             hosting_spending_data_points=hosting_spending_data_points,
@@ -36,6 +104,7 @@ def finances():
             total_spending_data_points=total_spending_data_points,
             profit_data_points=profit_data_points,
             totals=totals,
+            outstanding_info=outstanding_info,  # Pass outstanding info to template
             username=getUser(),
             title="Finances",
             **lang[session["userinfo"]["lang"]],
@@ -52,16 +121,18 @@ def manage():
     try:
         expenses = SimpleFinanceService.get_all_expenses()
         revenues = SimpleFinanceService.get_all_revenue()
+        outstanding_info = SimpleFinanceService.get_stripe_outstanding_balance()
         
         # Separate recurring and one-time expenses
         recurring_expenses = [e for e in expenses if e['is_recurring']]
         one_time_expenses = [e for e in expenses if not e['is_recurring']]
         
         return render_template(
-            "admin/manage_finances.html",  # This should be your management template
+            "admin/manage_finances.html",
             recurring_expenses=recurring_expenses,
             one_time_expenses=one_time_expenses,
             revenues=revenues,
+            outstanding_info=outstanding_info,  # Pass outstanding info
             username=getUser(),
             title="Manage Finances",
             **lang[session["userinfo"]["lang"]],
@@ -70,6 +141,23 @@ def manage():
     except Exception as e:
         flash(f"Error loading management page: {str(e)}", "error")
         return render_template("admin/error.html", error=str(e))
+
+# Add a new route to get outstanding info via AJAX (optional)
+@finance_blueprint.route("/finances/outstanding", methods=["GET"])
+@owner_required
+def get_outstanding():
+    """API endpoint to get current outstanding Stripe balance"""
+    try:
+        outstanding_info = SimpleFinanceService.get_stripe_outstanding_balance()
+        return {
+            "success": True,
+            "data": outstanding_info
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }, 500
 
 @finance_blueprint.route("/finances/add-recurring", methods=["POST"])
 @owner_required

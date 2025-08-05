@@ -350,7 +350,138 @@ class SimpleFinanceService:
             logger.error(f"Error syncing Stripe revenue: {e}")
             return {"added": 0, "skipped": 0, "error": str(e)}
 
+    @staticmethod
+    def get_stripe_outstanding_balance() -> dict:
+        """
+        Get the current outstanding balance from Stripe that will be paid out.
+        This includes the pending balance that hasn't been transferred yet.
+        """
+        try:
+            config = load_config()
+            stripe.api_key = config["stripe"]["secret_key"]
+            
+            # Get the current balance from Stripe
+            balance = stripe.Balance.retrieve()
+            
+            outstanding_data = {
+                "total_pending": 0.0,
+                "currency": "EUR",  # Default, will be updated
+                "next_payout_date": None,
+                "breakdown": []
+            }
+            
+            # Process available balance (money ready to be paid out)
+            for balance_item in balance.available:
+                if balance_item.amount > 0:  # Only positive balances
+                    amount = float(balance_item.amount) / 100  # Convert from cents
+                    currency = balance_item.currency.upper()
+                    
+                    outstanding_data["breakdown"].append({
+                        "type": "available",
+                        "amount": amount,
+                        "currency": currency
+                    })
+                    
+                    # Convert to EUR if needed for totaling
+                    if currency == "EUR":
+                        outstanding_data["total_pending"] += amount
+                        outstanding_data["currency"] = currency
+                    else:
+                        # Convert to EUR using current exchange rate
+                        eur_amount = get_exchange_rate(amount, currency, "EUR", date.today())
+                        outstanding_data["total_pending"] += eur_amount
+            
+            # Process pending balance (money being processed)
+            for balance_item in balance.pending:
+                if balance_item.amount > 0:  # Only positive balances
+                    amount = float(balance_item.amount) / 100  # Convert from cents
+                    currency = balance_item.currency.upper()
+                    
+                    outstanding_data["breakdown"].append({
+                        "type": "pending",
+                        "amount": amount,
+                        "currency": currency
+                    })
+                    
+                    # Convert to EUR if needed for totaling
+                    if currency == "EUR":
+                        outstanding_data["total_pending"] += amount
+                    else:
+                        # Convert to EUR using current exchange rate
+                        eur_amount = get_exchange_rate(amount, currency, "EUR", date.today())
+                        outstanding_data["total_pending"] += eur_amount
+            
+            # Estimate next payout date based on Stripe's typical schedule
+            # Stripe typically pays out around the 20th of each month for the previous month's earnings
+            try:
+                today = date.today()
+                
+                # If we're before the 20th of current month, the next payout is likely the 20th of this month
+                # If we're after the 20th, the next payout is likely the 20th of next month
+                if today.day < 20:
+                    # Next payout is this month's 20th
+                    estimated_payout = date(today.year, today.month, 20)
+                else:
+                    # Next payout is next month's 20th
+                    if today.month == 12:
+                        estimated_payout = date(today.year + 1, 1, 20)
+                    else:
+                        estimated_payout = date(today.year, today.month + 1, 20)
+                
+                outstanding_data["next_payout_date"] = estimated_payout
+                
+            except Exception as e:
+                logger.warning(f"Could not estimate next payout date: {e}")
+                # Fallback to 20th of next month
+                today = date.today()
+                if today.month == 12:
+                    outstanding_data["next_payout_date"] = date(today.year + 1, 1, 20)
+                else:
+                    outstanding_data["next_payout_date"] = date(today.year, today.month + 1, 20)
+            
+            logger.info(f"Outstanding Stripe balance: {outstanding_data['total_pending']:.2f} EUR, next payout: {outstanding_data['next_payout_date']}")
+            return outstanding_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching Stripe outstanding balance: {e}")
+            return {
+                "total_pending": 0.0,
+                "currency": "EUR",
+                "next_payout_date": None,
+                "breakdown": [],
+                "error": str(e)
+            }
 
+    @staticmethod
+    def calculate_monthly_data_with_outstanding() -> Dict[str, Dict[str, float]]:
+        """
+        Calculate monthly financial data including outstanding Stripe revenue
+        for the month it will be transferred.
+        """
+        # Get the base monthly data
+        monthly_data = SimpleFinanceService.calculate_monthly_data()
+        
+        # Get outstanding Stripe balance
+        outstanding = SimpleFinanceService.get_stripe_outstanding_balance()
+        
+        # Add outstanding amount to the appropriate month
+        if outstanding["total_pending"] > 0 and outstanding["next_payout_date"]:
+            payout_month_key = outstanding["next_payout_date"].strftime("%Y-%m")
+            
+            # Ensure the month exists in our data
+            if payout_month_key not in monthly_data:
+                monthly_data[payout_month_key] = {"revenue": 0, "expenses": 0, "profit": 0}
+            
+            # Add outstanding amount to revenue
+            monthly_data[payout_month_key]["revenue"] += outstanding["total_pending"]
+            monthly_data[payout_month_key]["profit"] = (
+                monthly_data[payout_month_key]["revenue"] - 
+                monthly_data[payout_month_key]["expenses"]
+            )
+            
+            logger.info(f"Added {outstanding['total_pending']:.2f} EUR outstanding revenue to {payout_month_key}")
+        
+        return monthly_data
 
 def get_finances() -> Tuple:
     """Legacy function for existing dashboard compatibility with temporary classification"""

@@ -21,26 +21,85 @@
                     data-bs-target="#csvImportCollapse">
                 <i class="fas fa-file-csv"></i> Import CSV
             </button>
-            <div class="collapse" id="csvImportCollapse">
-                <div class="card border-secondary">
-                    <div class="card-header bg-light text-dark d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="fas fa-upload"></i> CSV Import</h6>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ url_for('finance.ingest_csv') }}" enctype="multipart/form-data">
-                            <div class="row g-2 align-items-center">
-                                <div class="col-md-8">
-                                    <input type="file" name="file" accept=".csv" class="form-control form-control-sm" required>
-                                </div>
-                                <div class="col-md-4">
-                                    <button type="submit" class="btn btn-secondary btn-sm w-100">
-                                        <i class="fas fa-upload"></i> Upload
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+        </div>
+    </div>
+
+    <!-- Outstanding Revenue Info -->
+    {% if outstanding_info %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-{% if outstanding_info.total_pending > 0 %}info{% else %}secondary{% endif %}">
+                <div class="card-header bg-{% if outstanding_info.total_pending > 0 %}info{% else %}secondary{% endif %} text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-{% if outstanding_info.total_pending > 0 %}clock{% else %}check-circle{% endif %}"></i>
+                        Stripe Outstanding Balance
+                    </h6>
+                    <span class="badge bg-light text-dark">
+                        {{ "%.2f"|format(outstanding_info.total_pending) }}€
+                    </span>
                 </div>
+                <div class="card-body">
+                    {% if outstanding_info.total_pending > 0 %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Amount Pending:</strong> {{ "%.2f"|format(outstanding_info.total_pending) }}€
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Expected Transfer:</strong> 
+                                {% if outstanding_info.next_payout_date %}
+                                    {{ outstanding_info.next_payout_date.strftime('%B %d, %Y') }}
+                                {% else %}
+                                    Not scheduled
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if outstanding_info.breakdown %}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <strong>Breakdown:</strong>
+                                {% for item in outstanding_info.breakdown %}
+                                <span class="badge bg-secondary me-1">
+                                    {{ item.type|title }}: {{ "%.2f"|format(item.amount) }} {{ item.currency }}
+                                </span>
+                                {% endfor %}
+                            </small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <p class="mb-0 text-muted">
+                            <i class="fas fa-info-circle"></i> No pending balance in Stripe account
+                        </p>
+                    {% endif %}
+                    {% if outstanding_info.get('error') %}
+                        <div class="alert alert-warning mt-2 mb-0">
+                            <small><i class="fas fa-exclamation-triangle"></i> {{ outstanding_info.error }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- CSV Import Collapse -->
+    <div class="collapse mb-3" id="csvImportCollapse">
+        <div class="card border-secondary">
+            <div class="card-header bg-light text-dark d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-upload"></i> CSV Import</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('finance.ingest_csv') }}" enctype="multipart/form-data">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-8">
+                            <input type="file" name="file" accept=".csv" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-secondary btn-sm w-100">
+                                <i class="fas fa-upload"></i> Upload
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -324,8 +383,14 @@
                             <small class="text-muted">Revenue Entries</small>
                         </div>
                         <div class="col-md-3 col-6">
-                            <h4 class="text-info">3</h4>
-                            <small class="text-muted">Currencies</small>
+                            <h4 class="text-info">
+                                {% if outstanding_info and outstanding_info.total_pending > 0 %}
+                                    +{{ "%.0f"|format(outstanding_info.total_pending) }}€
+                                {% else %}
+                                    0€
+                                {% endif %}
+                            </h4>
+                            <small class="text-muted">Pending</small>
                         </div>
                     </div>
                 </div>
