@@ -9136,6 +9136,7 @@ def live_map():
     """
     return render_template(
         "public/current_global.html",
+        title=lang[session["userinfo"]["lang"]]["live_map"],
         username=getUser(),
         logosList=listOperatorsLogos(),
         translations=lang[session["userinfo"]["lang"]],
