@@ -149,6 +149,7 @@ from py.transit_routing import (
     convert_google_response_to_trips,
     convert_here_response_to_trips,
 )
+from py.gps_cleaner import clean_gps_route
 from py.update_currency import run_currency_update
 from py.utils import (
     get_all_countries,
@@ -1898,146 +1899,195 @@ def cluster_waypoints(waypoints, min_distance_meters=10):
 @app.route("/<username>/save_trip_from_gpx/<gpx_id>", methods=["POST"])
 @login_required
 def saveTripFromGPX(username, gpx_id):
-    try:
-        request_data = request.get_json()
-        trip_type = request_data.get("type", "train")
-        use_routing = request_data.get("use_routing", False)
+    request_data = request.get_json()
+    trip_type = request_data.get("type", "train")
+    use_routing = request_data.get("use_routing", False)
 
-        # Retrieve the GPX data from the database
-        with managed_cursor(mainConn) as cursor:
-            cursor.execute(
-                "SELECT * FROM gpx WHERE uid = ? AND username = ?", (gpx_id, username)
+    # Retrieve the GPX data from the database
+    with managed_cursor(mainConn) as cursor:
+        cursor.execute(
+            "SELECT * FROM gpx WHERE uid = ? AND username = ?", (gpx_id, username)
+        )
+        gpx = cursor.fetchone()
+
+    if not gpx:
+        return jsonify(
+            {"error": "GPX file not found or does not belong to the user."}
+        ), 404
+
+    # Extract GPX details
+    origin = gpx["origin"]
+    destination = gpx["destination"]
+    start_time = (
+        gpx["start_time"].replace(" ", "T") if gpx["start_time"] is not None else -1
+    )
+    end_time = (
+        gpx["end_time"].replace(" ", "T") if gpx["start_time"] is not None else -1
+    )
+
+    distance = gpx["distance"]
+    duration = gpx["duration"] if gpx["duration"] not in (None, "") else 0
+    notes = gpx["notes"]
+    precision = "preciseDates" if start_time != -1 else "unknown"
+
+    # Convert points to proper format
+    raw_waypoints = [
+        {"lat": point[0], "lng": point[1]} for point in json.loads(gpx["path"])
+    ]
+
+    # Create a new trip structure
+    newTrip = {
+        "type": trip_type,
+        "originStation": [None, origin],
+        "destinationStation": [None, destination],
+        "newTripStart": start_time,
+        "newTripEnd": end_time,
+        "trip_length": distance,
+        "estimated_trip_duration": duration,
+        "operator": "",
+        "lineName": "",
+        "price": None,
+        "currency": None,
+        "purchasing_date": None,
+        "precision": precision,
+        "notes": notes,
+        "onlyDateDuration": "",
+        "unknownType": "past",
+        "waypoints": json.dumps([]),  # Will be updated below
+    }
+
+    # Process the route based on user preferences
+    if use_routing and trip_type in [
+        "train", "metro", "tram", "ferry", "aerialway", "bus", "car", "walk", "cycle"
+    ]:
+        # Use advanced GPS cleaning instead of basic routing
+        print(f"Processing GPS route with {len(raw_waypoints)} points using smart routing...")
+        
+        cleaning_result = clean_gps_route(
+            raw_waypoints=raw_waypoints,
+            forwardRouting=forwardRouting,
+            trip_type=trip_type,
+            deviation_threshold=800,       # Kept: Now defines the "validation corridor" width
+            max_search_points=75
+        )
+        
+        if cleaning_result["success"]:
+            # Use cleaned route
+            path = cleaning_result["path"]
+            waypoints = cleaning_result["waypoints"]
+            
+            # Update trip details with cleaned route info
+            newTrip["trip_length"] = cleaning_result["distance"]
+            newTrip["estimated_trip_duration"] = cleaning_result["duration"]
+            newTrip["waypoints"] = json.dumps(waypoints)
+            
+            # Add processing stats to notes (optional - can be removed for production)
+            processing_stats = (
+                f" [Smart routing: {len(raw_waypoints)}→{len(path)} points "
+                f"({cleaning_result['compression_ratio']:.1f}x compression), "
+                f"{cleaning_result['reroute_count']} route corrections]"
             )
-            gpx = cursor.fetchone()
-
-        if not gpx:
-            return jsonify(
-                {"error": "GPX file not found or does not belong to the user."}
-            ), 404
-
-        # Extract GPX details
-        origin = gpx["origin"]
-        destination = gpx["destination"]
-        start_time = (
-            gpx["start_time"].replace(" ", "T") if gpx["start_time"] is not None else -1
-        )
-        end_time = (
-            gpx["end_time"].replace(" ", "T") if gpx["start_time"] is not None else -1
-        )
-
-        distance = gpx["distance"]
-        duration = gpx["duration"] if gpx["duration"] not in (None, "") else 0
-        notes = gpx["notes"]
-        precision = "preciseDates" if start_time != -1 else "unknown"
-
-        # Convert points to proper format for routing
-        waypoints = [
-            {"lat": point[0], "lng": point[1]} for point in json.loads(gpx["path"])
-        ]
-
-        # Use clustering to reduce number of points
-        waypoints = cluster_waypoints(waypoints, 10)
-
-        # Create a new trip structure
-        newTrip = {
-            "type": trip_type,
-            "originStation": [None, origin],
-            "destinationStation": [None, destination],
-            "newTripStart": start_time,
-            "newTripEnd": end_time,
-            "trip_length": distance,
-            "estimated_trip_duration": duration,
-            "operator": "",
-            "lineName": "",
-            "price": None,
-            "currency": None,
-            "purchasing_date": None,
-            "precision": precision,
-            "notes": notes,
-            "onlyDateDuration": "",
-            "unknownType": "past",
-            "waypoints": json.dumps(waypoints),
-        }
-
-        if use_routing and trip_type in [
-            "train",
-            "metro",
-            "tram",
-            "ferry",
-            "aerialway",
-            "bus",
-            "car",
-            "walk",
-            "cycle",
-        ]:
-            # Convert waypoints to OSRM path format (lng,lat)
-            path_str = ";".join(f"{wp['lng']},{wp['lat']}" for wp in waypoints)
-
-            # Determine the routing type and forward the request
-            router_type = "driving" if trip_type == "bus" else trip_type
-
-            # Options for fuzzy routing - adding radiuses and overview
-            options = "overview=full"
-
-            # Add radiuses parameter - gives flexibility for each waypoint (in meters)
-            # This is key for fuzzy routing - allows OSRM to find nearby roads within this radius
-            radiuses = ";".join(
-                ["50"] * len(waypoints)
-            )  # 50 meters radius for each point
-            options += f"&radiuses={radiuses}"
-
-            # Add continue_straight=false for more natural routing at intersections
-            options += "&continue_straight=false"
-
-            # For better snapping tolerance in urban areas
-            options += "&snapping=any"
-
-            router_path = f"route/v1/{router_type}/{path_str}"
-
-            response = forwardRouting(router_path, trip_type, options)
-
-            # Parse the router response
-            routing_result = json.loads(response)
-            if routing_result["code"] != "Ok":
-                path = [
-                    {"lat": node[0], "lng": node[1]} for node in json.loads(gpx["path"])
-                ]  # Convert JSON path to list
-            else:
-                # Process successful routing
-                path = [
-                    {"lat": coord[0], "lng": coord[1]}
-                    for coord in polyline.decode(
-                        routing_result["routes"][0]["geometry"]
-                    )
-                ]
-                newTrip["trip_length"] = routing_result["routes"][0]["distance"]
-                newTrip["estimated_trip_duration"] = routing_result["routes"][0][
-                    "duration"
-                ]
+            newTrip["notes"] = (notes or "") + processing_stats
+            
+            print(f"Smart routing successful: {cleaning_result['compression_ratio']:.1f}x compression")
+            
         else:
-            path = [
-                {"lat": node[0], "lng": node[1]} for node in json.loads(gpx["path"])
-            ]  # Convert JSON path to list
+            # Fallback to basic clustering if smart routing fails
+            print(f"Smart routing failed: {cleaning_result.get('error')}. Using basic clustering.")
+            waypoints = cluster_waypoints(raw_waypoints, 20)
+            path = raw_waypoints
+            newTrip["waypoints"] = json.dumps(waypoints)
+            
+    else:
+        # No routing - use original GPX path with basic clustering
+        path = raw_waypoints
+        waypoints = cluster_waypoints(raw_waypoints, 20)
+        newTrip["waypoints"] = json.dumps(waypoints)
 
-        # Delete the GPX file after saving as a trip
-        with managed_cursor(mainConn) as cursor:
-            cursor.execute(
-                "DELETE FROM gpx WHERE uid = ? AND username = ?", (gpx_id, username)
-            )
-
-        mainConn.commit()
-
-        # Call the saveTripToDb function to save the trip
-        saveTripToDb(
-            username=username, newTrip=newTrip, newPath=path, trip_type=trip_type
+    # Delete the GPX file after saving as a trip
+    with managed_cursor(mainConn) as cursor:
+        cursor.execute(
+            "DELETE FROM gpx WHERE uid = ? AND username = ?", (gpx_id, username)
         )
 
-        return jsonify({"success": True}), 200
+    mainConn.commit()
 
-    except Exception as e:
-        mainConn.rollback()
-        raise (e)
+    # Call the saveTripToDb function to save the trip
+    saveTripToDb(
+        username=username, newTrip=newTrip, newPath=path, trip_type=trip_type
+    )
 
+    return jsonify({
+        "success": True,
+        "message": f"Trip saved with {'smart routing' if use_routing else 'original path'}",
+        "points_processed": len(raw_waypoints),
+        "final_points": len(path)
+    }), 200
+
+
+@app.route("/<username>/preview_smart_routing/<gpx_id>/<trip_type>", methods=["POST", "GET"])
+@login_required  
+def previewSmartRouting(username, gpx_id, trip_type):
+    """
+    Preview smart routing results without saving the trip
+    GET: Shows interactive map with original vs cleaned route
+    POST: Returns JSON data for API usage
+    """
+   
+    # Retrieve GPX data
+    with managed_cursor(mainConn) as cursor:
+        cursor.execute(
+            "SELECT * FROM gpx WHERE uid = ? AND username = ?", (gpx_id, username)
+        )
+        gpx = cursor.fetchone()
+    
+    if not gpx:
+        if request.method == "GET":
+            return render_template('error.html', error="GPX file not found"), 404
+        return jsonify({"error": "GPX file not found"}), 404
+
+    # Convert to waypoints format
+    raw_waypoints = [
+        {"lat": point[0], "lng": point[1]} for point in json.loads(gpx["path"])
+    ]
+   
+    # Clean the GPS route with smart routing
+    cleaning_result = clean_gps_route(
+        raw_waypoints=raw_waypoints,
+        forwardRouting=forwardRouting,
+        trip_type=trip_type,
+        deviation_threshold=800,       # Kept: Now defines the "validation corridor" width
+        max_search_points=75
+    )
+   
+    if request.method == "POST":
+        # Return JSON for API usage
+        if cleaning_result["success"]:
+            return jsonify({
+                "success": True,
+                "original_points": len(raw_waypoints),
+                "cleaned_points": len(cleaning_result["path"]),
+                "waypoints_count": len(cleaning_result["waypoints"]),
+                "compression_ratio": cleaning_result["compression_ratio"],
+                "reroute_count": cleaning_result["reroute_count"],
+                "distance": cleaning_result["distance"],
+                "duration": cleaning_result["duration"],
+                "preview_path": cleaning_result["path"][:100]  # First 100 points for preview
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": cleaning_result["error"],
+                "fallback_points": len(raw_waypoints)
+            })
+    
+    # GET request: Show interactive map
+    return render_template('preview_route.html',
+                         gpx=gpx,
+                         trip_type=trip_type,
+                         raw_waypoints=json.dumps(raw_waypoints),
+                         cleaning_result=json.dumps(cleaning_result),
+                         success=cleaning_result["success"])
 
 @app.route("/<username>/submit_ticket", methods=["POST"])
 @login_required
