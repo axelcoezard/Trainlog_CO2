@@ -1522,7 +1522,7 @@ def detach_tag(username):
 def new_ticket(username):
     return render_template(
         "new_ticket.html",
-        title="new ticket",
+        title=lang[session["userinfo"]["lang"]]["new_ticket"],
         country_list=get_all_countries(),
         username=username,
         **lang[session["userinfo"]["lang"]],
