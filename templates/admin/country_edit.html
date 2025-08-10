@@ -1,9 +1,7 @@
 {% extends "bootstrap/layout.html" %}
 {% include "bootstrap/leafletLayout.html" %}
-
 {% block content %}
 <script src="{{ url_for('static',filename='js/map.js') }}"></script>
-
 {% include nav %}
 
 <!-- Spinner Overlay -->
@@ -12,34 +10,171 @@
         <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
     </div>
 </div>
+
+<!-- Control Panel -->
+<div class="control-panel">
+    <div class="panel-left">
+        <div class="area-stats">
+            <div class="stat-item">
+                <i class="fas fa-expand-arrows-alt"></i>
+                <span class="stat-label">Total:</span>
+                <span id="totalArea" class="stat-value">Loading...</span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-mouse-pointer"></i>
+                <span class="stat-label">Selected:</span>
+                <span id="selectedArea" class="stat-value">0 m²</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="panel-center">
+        <div class="mode-selector">
+            <button id="deleteMode" class="mode-btn active" data-mode="delete">
+                <i class="fas fa-trash"></i>
+                Delete Mode
+            </button>
+            <button id="mergeMode" class="mode-btn" data-mode="merge">
+                <i class="fas fa-object-group"></i>
+                Merge Mode
+            </button>
+        </div>
+        
+        <div class="action-buttons">
+            <button id="processPolygons" class="action-btn delete-btn">
+                <i class="fas fa-times"></i>
+                Remove Selected
+            </button>
+            <button id="mergePolygons" class="action-btn merge-btn" style="display: none;">
+                <i class="fas fa-compress-arrows-alt"></i>
+                Merge Selected
+            </button>
+            <button id="clearSelection" class="action-btn clear-btn">
+                <i class="fas fa-undo"></i>
+                Clear Selection
+            </button>
+        </div>
+    </div>
+    
+    <div class="panel-right">
+        <div class="status-info">
+            <i class="fas fa-info-circle"></i>
+            <span id="selectedCount">0 selected</span>
+        </div>
+    </div>
+</div>
+
 <div id="map" class="mapUser"></div>
 
-<button id="processPolygons">Remove Marked Polygons</button>
-
 <script>
-  var map = createMap();
+var map = createMap();
+var clickedPolygons = new Set();
+var geoLayer;
+var currentMode = 'delete';
+var allFeatures = {};
+var totalAreaM2 = 0;
 
-  var clickedPolygons = new Set();
+function formatArea(area) {
+    if (area >= 1000000) {
+        return (area / 1000000).toFixed(2) + ' km²';
+    } else {
+        return area.toFixed(0) + ' m²';
+    }
+}
 
-  function onEachFeature(feature, layer) {
-    layer.on({
-      click: function (e) {
-        if (e.target.options.fillColor === 'green') {
-          e.target.setStyle({ fillColor: 'red' });
-          e.target.setStyle({ color: 'red' });
-          clickedPolygons.add(feature.properties.id);
-        } else {
-          e.target.setStyle({ fillColor: 'green' });
-		  e.target.setStyle({ color: 'green' });
-          clickedPolygons.delete(feature.properties.id);
+function updateSelectedCount() {
+    document.getElementById('selectedCount').textContent = `${clickedPolygons.size} selected`;
+    
+    // Calculate selected area
+    let selectedArea = 0;
+    clickedPolygons.forEach(id => {
+        if (allFeatures[id]) {
+            selectedArea += allFeatures[id].properties.area_m2;
         }
-      }
     });
-  }
-  fetch('{{url_for("get_full_geojson", cc=cc)}}') // replace with your endpoint
+    
+    document.getElementById('selectedArea').textContent = formatArea(selectedArea);
+}
+
+function clearAllSelection() {
+    clickedPolygons.clear();
+    if (geoLayer) {
+        geoLayer.eachLayer(function(layer) {
+            layer.setStyle({
+                fillColor: 'green',
+                color: 'green'
+            });
+        });
+    }
+    updateSelectedCount();
+}
+
+function onEachFeature(feature, layer) {
+    layer.on({
+        click: function (e) {
+            const isSelected = clickedPolygons.has(feature.properties.id);
+            
+            if (currentMode === 'merge' && clickedPolygons.size >= 2 && !isSelected) {
+                alert('You can only select 2 polygons for merging');
+                return;
+            }
+            
+            if (isSelected) {
+                e.target.setStyle({ fillColor: 'green', color: 'green' });
+                clickedPolygons.delete(feature.properties.id);
+            } else {
+                const color = currentMode === 'delete' ? 'red' : 'blue';
+                e.target.setStyle({ fillColor: color, color: color });
+                clickedPolygons.add(feature.properties.id);
+            }
+            
+            updateSelectedCount();
+        }
+    });
+}
+
+// Mode switching
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentMode = this.dataset.mode;
+        
+        // Update UI visibility
+        if (currentMode === 'delete') {
+            document.getElementById('processPolygons').style.display = 'block';
+            document.getElementById('mergePolygons').style.display = 'none';
+        } else {
+            document.getElementById('processPolygons').style.display = 'none';
+            document.getElementById('mergePolygons').style.display = 'block';
+        }
+        
+        clearAllSelection();
+    });
+});
+
+// Clear selection
+document.getElementById('clearSelection').addEventListener('click', clearAllSelection);
+
+// Load GeoJSON
+fetch('{{url_for("get_full_geojson", cc=cc)}}')
     .then(response => response.json())
     .then(data => {
-		var geoLayer = L.geoJSON(data, {
+        console.log('Loaded data:', data);
+        
+        // Store features and total area
+        if (data.features) {
+            data.features.forEach(feature => {
+                allFeatures[feature.properties.id] = feature;
+            });
+        }
+        
+        // Get total area from the data
+        totalAreaM2 = data.total_area_m2 || 0;
+        console.log('Total area:', totalAreaM2);
+        document.getElementById('totalArea').textContent = formatArea(totalAreaM2);
+        
+        geoLayer = L.geoJSON(data, {
             style: {
                 fillColor: 'green',
                 weight: 2,
@@ -49,36 +184,285 @@
             },
             onEachFeature: onEachFeature
         }).addTo(map);
-		console.log(geoLayer)
+        
         map.fitBounds(geoLayer.getBounds());
+        document.querySelector('.spinner-container').style.display = 'none';
+    })
+    .catch(error => {
+        console.error('Error loading GeoJSON:', error);
         document.querySelector('.spinner-container').style.display = 'none';
     });
 
-  document.getElementById('processPolygons').addEventListener('click', function () {
-    // Here, send the clickedPolygons to your backend to process and remove from the file
+// Delete polygons
+document.getElementById('processPolygons').addEventListener('click', function () {
+    if (clickedPolygons.size === 0) {
+        alert('No polygons selected for deletion');
+        return;
+    }
+    
     fetch('{{url_for("remove_polygons", cc=cc)}}', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(Array.from(clickedPolygons))
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(Array.from(clickedPolygons))
     })
     .then(response => response.json())
     .then(data => {
-      if (data.success) {
-        alert("Successfully processed polygons!");
-		location.reload();
-      } else {
-        alert("Error processing polygons.");
-      }
+        if (data.success) {
+            alert("Successfully removed polygons!");
+            location.reload();
+        } else {
+            alert("Error processing polygons.");
+        }
     });
-  });
+});
+
+// Merge polygons
+document.getElementById('mergePolygons').addEventListener('click', function () {
+    if (clickedPolygons.size !== 2) {
+        alert('Please select exactly 2 polygons to merge');
+        return;
+    }
+    
+    fetch('{{url_for("merge_polygons", cc=cc)}}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(Array.from(clickedPolygons))
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert("Successfully merged polygons!");
+            location.reload();
+        } else {
+            alert(data.message || "Error merging polygons.");
+        }
+    });
+});
 </script>
 
 <style>
-  #map {
-    height: 800px;
-  }
-</style>
+#map {
+    height: calc(100vh - 140px);
+    margin-top: 0;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
 
+.control-panel {
+    background: #ffffff;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    flex-wrap: nowrap;
+    min-height: 60px;
+}
+
+.panel-left, .panel-center, .panel-right {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.panel-center {
+    flex-direction: row;
+    gap: 16px;
+    justify-content: center;
+    flex: 1;
+}
+
+.area-stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+    white-space: nowrap;
+}
+
+.stat-item i {
+    color: #6c757d;
+    width: 12px;
+    text-align: center;
+    font-size: 11px;
+}
+
+.stat-label {
+    font-weight: 500;
+    color: #495057;
+    font-size: 12px;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #212529;
+    font-family: 'SFMono-Regular', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    background: #ffffff;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+.mode-selector, .action-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.mode-btn, .action-btn {
+    padding: 4px 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    background: #ffffff;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.mode-btn i, .action-btn i {
+    width: 12px;
+    text-align: center;
+    font-size: 11px;
+}
+
+.mode-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+    box-shadow: 0 1px 3px rgba(0,123,255,0.2);
+}
+
+.mode-btn:hover:not(.active) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.delete-btn {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.delete-btn:hover {
+    background: #c82333;
+    border-color: #bd2130;
+    box-shadow: 0 1px 3px rgba(220,53,69,0.3);
+}
+
+.merge-btn {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.merge-btn:hover {
+    background: #218838;
+    border-color: #1e7e34;
+    box-shadow: 0 1px 3px rgba(40,167,69,0.3);
+}
+
+.clear-btn {
+    background: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.clear-btn:hover {
+    background: #5a6268;
+    border-color: #545b62;
+    box-shadow: 0 1px 3px rgba(108,117,125,0.3);
+}
+
+.status-info {
+    background: #e9ecef;
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: #495057;
+    font-weight: 500;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #dee2e6;
+    white-space: nowrap;
+}
+
+.status-info i {
+    color: #6c757d;
+    width: 12px;
+    text-align: center;
+    font-size: 11px;
+}
+
+@media (max-width: 1200px) {
+    .control-panel {
+        flex-direction: column;
+        gap: 12px;
+        padding: 10px 12px;
+    }
+    
+    .panel-left, .panel-right, .panel-center {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .panel-center {
+        flex-direction: row;
+        gap: 12px;
+    }
+    
+    .area-stats {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .mode-selector, .action-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+}
+
+/* Spinner improvements */
+.spinner-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255,255,255,0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.lds-spinner {
+    color: #667eea;
+}
+</style>
 {% endblock %}
