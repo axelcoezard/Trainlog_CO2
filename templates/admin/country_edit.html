@@ -41,13 +41,9 @@
         </div>
         
         <div class="action-buttons">
-            <button id="processPolygons" class="action-btn delete-btn">
-                <i class="fas fa-times"></i>
-                Remove Selected
-            </button>
-            <button id="mergePolygons" class="action-btn merge-btn" style="display: none;">
-                <i class="fas fa-compress-arrows-alt"></i>
-                Merge Selected
+            <button id="addToQueue" class="action-btn queue-btn">
+                <i class="fas fa-plus"></i>
+                Add to Queue
             </button>
             <button id="clearSelection" class="action-btn clear-btn">
                 <i class="fas fa-undo"></i>
@@ -57,9 +53,18 @@
     </div>
     
     <div class="panel-right">
-        <div class="status-info">
-            <i class="fas fa-info-circle"></i>
-            <span id="selectedCount">0 selected</span>
+        <div class="queue-info">
+            <span id="queueCount">0 queued</span>
+        </div>
+        <div class="queue-actions">
+            <button id="processQueue" class="action-btn process-btn" style="display: none;">
+                <i class="fas fa-play"></i>
+                Process Queue
+            </button>
+            <button id="clearQueue" class="action-btn discard-btn" style="display: none;">
+                <i class="fas fa-trash"></i>
+                Clear Queue
+            </button>
         </div>
     </div>
 </div>
@@ -68,11 +73,12 @@
 
 <script>
 var map = createMap();
-var clickedPolygons = new Set();
+var selectedPolygons = new Set();
 var geoLayer;
 var currentMode = 'delete';
 var allFeatures = {};
 var totalAreaM2 = 0;
+var operationQueue = [];
 
 function formatArea(area) {
     if (area >= 1000000) {
@@ -82,53 +88,99 @@ function formatArea(area) {
     }
 }
 
-function updateSelectedCount() {
-    document.getElementById('selectedCount').textContent = `${clickedPolygons.size} selected`;
-    
-    // Calculate selected area
+function updateUI() {
+    // Update selected area
     let selectedArea = 0;
-    clickedPolygons.forEach(id => {
+    selectedPolygons.forEach(id => {
         if (allFeatures[id]) {
             selectedArea += allFeatures[id].properties.area_m2;
         }
     });
-    
     document.getElementById('selectedArea').textContent = formatArea(selectedArea);
+    
+    // Update queue info
+    const queueCount = operationQueue.length;
+    document.getElementById('queueCount').textContent = `${queueCount} queued`;
+    
+    // Show/hide queue buttons
+    const processBtn = document.getElementById('processQueue');
+    const clearBtn = document.getElementById('clearQueue');
+    
+    if (queueCount > 0) {
+        processBtn.style.display = 'block';
+        clearBtn.style.display = 'block';
+    } else {
+        processBtn.style.display = 'none';
+        clearBtn.style.display = 'none';
+    }
+    
+    // Update add to queue button text
+    const addBtn = document.getElementById('addToQueue');
+    if (currentMode === 'delete') {
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Queue Delete';
+    } else {
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Queue Merge';
+    }
 }
 
-function clearAllSelection() {
-    clickedPolygons.clear();
+function clearSelection() {
+    selectedPolygons.clear();
     if (geoLayer) {
         geoLayer.eachLayer(function(layer) {
-            layer.setStyle({
-                fillColor: 'green',
-                color: 'green'
-            });
+            // Only reset if not queued
+            if (!isPolygonQueued(layer.feature.properties.id)) {
+                layer.setStyle({
+                    fillColor: 'green',
+                    color: 'green',
+                    fillOpacity: 0.7
+                });
+            }
         });
     }
-    updateSelectedCount();
+    updateUI();
+}
+
+function isPolygonQueued(polygonId) {
+    return operationQueue.some(op => op.polygonIds.includes(polygonId));
+}
+
+function getQueuedPolygonColor(polygonId) {
+    for (let op of operationQueue) {
+        if (op.polygonIds.includes(polygonId)) {
+            return op.type === 'delete' ? '#8b0000' : '#000080';
+        }
+    }
+    return null;
 }
 
 function onEachFeature(feature, layer) {
     layer.on({
         click: function (e) {
-            const isSelected = clickedPolygons.has(feature.properties.id);
+            const polygonId = feature.properties.id;
             
-            if (currentMode === 'merge' && clickedPolygons.size >= 2 && !isSelected) {
+            // Can't select queued polygons
+            if (isPolygonQueued(polygonId)) {
+                alert('This polygon is already queued for an operation');
+                return;
+            }
+            
+            const isSelected = selectedPolygons.has(polygonId);
+            
+            if (currentMode === 'merge' && selectedPolygons.size >= 2 && !isSelected) {
                 alert('You can only select 2 polygons for merging');
                 return;
             }
             
             if (isSelected) {
-                e.target.setStyle({ fillColor: 'green', color: 'green' });
-                clickedPolygons.delete(feature.properties.id);
+                e.target.setStyle({ fillColor: 'green', color: 'green', fillOpacity: 0.7 });
+                selectedPolygons.delete(polygonId);
             } else {
                 const color = currentMode === 'delete' ? 'red' : 'blue';
-                e.target.setStyle({ fillColor: color, color: color });
-                clickedPolygons.add(feature.properties.id);
+                e.target.setStyle({ fillColor: color, color: color, fillOpacity: 0.7 });
+                selectedPolygons.add(polygonId);
             }
             
-            updateSelectedCount();
+            updateUI();
         }
     });
 }
@@ -139,22 +191,110 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         currentMode = this.dataset.mode;
-        
-        // Update UI visibility
-        if (currentMode === 'delete') {
-            document.getElementById('processPolygons').style.display = 'block';
-            document.getElementById('mergePolygons').style.display = 'none';
-        } else {
-            document.getElementById('processPolygons').style.display = 'none';
-            document.getElementById('mergePolygons').style.display = 'block';
-        }
-        
-        clearAllSelection();
+        clearSelection();
     });
 });
 
+// Add to queue
+document.getElementById('addToQueue').addEventListener('click', function() {
+    if (selectedPolygons.size === 0) {
+        alert('No polygons selected');
+        return;
+    }
+    
+    if (currentMode === 'merge' && selectedPolygons.size !== 2) {
+        alert('Please select exactly 2 polygons to merge');
+        return;
+    }
+    
+    // Add operation to queue
+    const operation = {
+        type: currentMode,
+        polygonIds: Array.from(selectedPolygons)
+    };
+    
+    operationQueue.push(operation);
+    
+    // Update polygon colors to show they're queued
+    const queueColor = currentMode === 'delete' ? '#8b0000' : '#000080';
+    selectedPolygons.forEach(id => {
+        geoLayer.eachLayer(function(layer) {
+            if (layer.feature.properties.id === id) {
+                layer.setStyle({
+                    fillColor: queueColor,
+                    color: queueColor,
+                    fillOpacity: 0.8
+                });
+            }
+        });
+    });
+    
+    selectedPolygons.clear();
+    updateUI();
+    
+    const actionName = currentMode === 'delete' ? 'deletion' : 'merge';
+});
+
 // Clear selection
-document.getElementById('clearSelection').addEventListener('click', clearAllSelection);
+document.getElementById('clearSelection').addEventListener('click', clearSelection);
+
+// Process queue
+document.getElementById('processQueue').addEventListener('click', function() {
+    if (operationQueue.length === 0) return;
+    
+    const queueCount = operationQueue.length;
+    if (!confirm(`Process ${queueCount} queued operation${queueCount > 1 ? 's' : ''}?`)) {
+        return;
+    }
+    
+    // Show spinner
+    document.querySelector('.spinner-container').style.display = 'flex';
+    
+    // Send queue to server
+    fetch('{{url_for("process_queue", cc=cc)}}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(operationQueue)
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.querySelector('.spinner-container').style.display = 'none';
+        if (data.success) {
+            alert(`Successfully processed ${queueCount} operation${queueCount > 1 ? 's' : ''}!`);
+            location.reload();
+        } else {
+            alert(`Error: ${data.message || 'Unknown error'}`);
+        }
+    })
+    .catch(error => {
+        document.querySelector('.spinner-container').style.display = 'none';
+        alert(`Error: ${error.message}`);
+        console.error('Error:', error);
+    });
+});
+
+// Clear queue
+document.getElementById('clearQueue').addEventListener('click', function() {
+    if (!confirm('Clear all queued operations?')) return;
+    
+    operationQueue = [];
+    
+    // Reset all polygon colors
+    if (geoLayer) {
+        geoLayer.eachLayer(function(layer) {
+            layer.setStyle({
+                fillColor: 'green',
+                color: 'green',
+                fillOpacity: 0.7
+            });
+        });
+    }
+    
+    clearSelection();
+    alert('Queue cleared');
+});
 
 // Load GeoJSON
 fetch('{{url_for("get_full_geojson", cc=cc)}}')
@@ -169,9 +309,7 @@ fetch('{{url_for("get_full_geojson", cc=cc)}}')
             });
         }
         
-        // Get total area from the data
         totalAreaM2 = data.total_area_m2 || 0;
-        console.log('Total area:', totalAreaM2);
         document.getElementById('totalArea').textContent = formatArea(totalAreaM2);
         
         geoLayer = L.geoJSON(data, {
@@ -187,70 +325,27 @@ fetch('{{url_for("get_full_geojson", cc=cc)}}')
         
         map.fitBounds(geoLayer.getBounds());
         document.querySelector('.spinner-container').style.display = 'none';
+        updateUI();
     })
     .catch(error => {
         console.error('Error loading GeoJSON:', error);
         document.querySelector('.spinner-container').style.display = 'none';
     });
-
-// Delete polygons
-document.getElementById('processPolygons').addEventListener('click', function () {
-    if (clickedPolygons.size === 0) {
-        alert('No polygons selected for deletion');
-        return;
-    }
-    
-    fetch('{{url_for("remove_polygons", cc=cc)}}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(Array.from(clickedPolygons))
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert("Successfully removed polygons!");
-            location.reload();
-        } else {
-            alert("Error processing polygons.");
-        }
-    });
-});
-
-// Merge polygons
-document.getElementById('mergePolygons').addEventListener('click', function () {
-    if (clickedPolygons.size !== 2) {
-        alert('Please select exactly 2 polygons to merge');
-        return;
-    }
-    
-    fetch('{{url_for("merge_polygons", cc=cc)}}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(Array.from(clickedPolygons))
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert("Successfully merged polygons!");
-            location.reload();
-        } else {
-            alert(data.message || "Error merging polygons.");
-        }
-    });
-});
 </script>
 
 <style>
+body {
+    overflow-x: hidden;
+}
+
 #map {
     height: calc(100vh - 140px);
+    width: 100%;
     margin-top: 0;
     border-radius: 4px;
     border: 1px solid #e0e0e0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-sizing: border-box;
 }
 
 .control-panel {
@@ -265,12 +360,16 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
     box-shadow: 0 2px 4px rgba(0,0,0,0.04);
     flex-wrap: nowrap;
     min-height: 60px;
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
 }
 
 .panel-left, .panel-center, .panel-right {
     display: flex;
     align-items: center;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .panel-center {
@@ -278,12 +377,21 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
     gap: 16px;
     justify-content: center;
     flex: 1;
+    overflow: hidden;
+}
+
+.panel-right {
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
 }
 
 .area-stats {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .stat-item {
@@ -321,9 +429,11 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
     border: 1px solid #dee2e6;
 }
 
-.mode-selector, .action-buttons {
+.mode-selector, .action-buttons, .queue-actions {
     display: flex;
-    gap: 6px;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .mode-btn, .action-btn {
@@ -360,28 +470,37 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
     border-color: #adb5bd;
 }
 
-.delete-btn {
-    background: #dc3545;
-    color: white;
-    border-color: #dc3545;
+.queue-btn {
+    background: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
 }
 
-.delete-btn:hover {
-    background: #c82333;
-    border-color: #bd2130;
-    box-shadow: 0 1px 3px rgba(220,53,69,0.3);
+.queue-btn:hover {
+    background: #e0a800;
+    border-color: #d39e00;
 }
 
-.merge-btn {
+.process-btn {
     background: #28a745;
     color: white;
     border-color: #28a745;
 }
 
-.merge-btn:hover {
+.process-btn:hover {
     background: #218838;
     border-color: #1e7e34;
-    box-shadow: 0 1px 3px rgba(40,167,69,0.3);
+}
+
+.discard-btn {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.discard-btn:hover {
+    background: #c82333;
+    border-color: #bd2130;
 }
 
 .clear-btn {
@@ -393,28 +512,17 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
 .clear-btn:hover {
     background: #5a6268;
     border-color: #545b62;
-    box-shadow: 0 1px 3px rgba(108,117,125,0.3);
 }
 
-.status-info {
+.queue-info {
     background: #e9ecef;
     padding: 4px 8px;
     border-radius: 4px;
     color: #495057;
     font-weight: 500;
     font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
     border: 1px solid #dee2e6;
     white-space: nowrap;
-}
-
-.status-info i {
-    color: #6c757d;
-    width: 12px;
-    text-align: center;
-    font-size: 11px;
 }
 
 @media (max-width: 1200px) {
@@ -440,7 +548,7 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
         gap: 8px;
     }
     
-    .mode-selector, .action-buttons {
+    .mode-selector, .action-buttons, .queue-actions {
         justify-content: center;
         flex-wrap: wrap;
         gap: 4px;
@@ -449,20 +557,64 @@ document.getElementById('mergePolygons').addEventListener('click', function () {
 
 /* Spinner improvements */
 .spinner-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255,255,255,0.9);
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(255,255,255,0.9) !important;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
+    justify-content: center !important;
+    align-items: center !important;<
+    z-index: 99999 !important;
 }
 
 .lds-spinner {
-    color: #667eea;
+    color: #007bff;
+    display: inline-block;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    top: 0 !important
+}
+
+.lds-spinner div {
+    transform-origin: 40px 40px;
+    animation: lds-spinner 1.2s linear infinite;
+}
+
+.lds-spinner div:after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 3px;
+    left: 37px;
+    width: 6px;
+    height: 18px;
+    border-radius: 20%;
+    background: #007bff;
+}
+
+.lds-spinner div:nth-child(1) { transform: rotate(0deg); animation-delay: -1.1s; }
+.lds-spinner div:nth-child(2) { transform: rotate(30deg); animation-delay: -1s; }
+.lds-spinner div:nth-child(3) { transform: rotate(60deg); animation-delay: -0.9s; }
+.lds-spinner div:nth-child(4) { transform: rotate(90deg); animation-delay: -0.8s; }
+.lds-spinner div:nth-child(5) { transform: rotate(120deg); animation-delay: -0.7s; }
+.lds-spinner div:nth-child(6) { transform: rotate(150deg); animation-delay: -0.6s; }
+.lds-spinner div:nth-child(7) { transform: rotate(180deg); animation-delay: -0.5s; }
+.lds-spinner div:nth-child(8) { transform: rotate(210deg); animation-delay: -0.4s; }
+.lds-spinner div:nth-child(9) { transform: rotate(240deg); animation-delay: -0.3s; }
+.lds-spinner div:nth-child(10) { transform: rotate(270deg); animation-delay: -0.2s; }
+.lds-spinner div:nth-child(11) { transform: rotate(300deg); animation-delay: -0.1s; }
+.lds-spinner div:nth-child(12) { transform: rotate(330deg); animation-delay: 0s; }
+
+@keyframes lds-spinner {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
 }
 </style>
 {% endblock %}

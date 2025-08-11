@@ -26,6 +26,8 @@ from functools import wraps
 from glob import glob
 from inspect import getcallargs
 from io import BytesIO, StringIO
+from shapely.geometry import shape, mapping
+from shapely.ops import unary_union
 
 import distinctipy
 import flask_monitoringdashboard as dashboard
@@ -3110,170 +3112,173 @@ def convertCurrency(baseCurrency, targetCurrency, date, price):
     )
     return jsonify(convertedPrice)
 
-from shapely.geometry import shape, mapping
-from shapely.ops import unary_union
 
-@app.route("/mergePolygons/<cc>", methods=["POST"])
+@app.route("/processQueue/<cc>", methods=["POST"])
 @admin_required
-def merge_polygons(cc):
+def process_queue(cc):
     try:
-        ids_to_merge = request.json
+        operations = request.json
         
-        if len(ids_to_merge) != 2:
-            return jsonify({"success": False, "message": "Exactly 2 polygons must be selected for merging"})
+        if not operations or len(operations) == 0:
+            return jsonify({"success": False, "message": "No operations to process"})
         
         directory_path = "country_percent/countries/processed/"
         file_path = os.path.join(directory_path, f"{cc}.geojson")
         
+        # Load the current GeoJSON data
         with open(file_path, "r") as file:
             geojson_data = json.load(file)
         
-        # Find the polygons to merge
-        polygons_to_merge = []
-        remaining_features = []
+        print(f"Processing {len(operations)} operations for {cc}")
         
-        for feature in geojson_data["features"]:
-            if feature["properties"]["id"] in ids_to_merge:
-                polygons_to_merge.append(feature)
-            else:
-                remaining_features.append(feature)
-        
-        if len(polygons_to_merge) != 2:
-            return jsonify({"success": False, "message": "Could not find both polygons to merge"})
-        
-        # Check if polygons are contiguous using distance-based approach
-        def polygons_are_contiguous(poly1, poly2, tolerance=0.0001):
-            def get_all_coordinates(poly):
-                coords = []
-                if poly["geometry"]["type"] == "Polygon":
-                    for ring in poly["geometry"]["coordinates"]:
-                        coords.extend(ring)
-                elif poly["geometry"]["type"] == "MultiPolygon":
-                    for polygon in poly["geometry"]["coordinates"]:
-                        for ring in polygon:
-                            coords.extend(ring)
-                return coords
+        # Process each operation in the queue
+        for i, operation in enumerate(operations):
+            operation_type = operation["type"]
+            polygon_ids = operation["polygonIds"]
             
-            def distance(coord1, coord2):
-                return ((coord1[0] - coord2[0]) ** 2 + (coord1[1] - coord2[1]) ** 2) ** 0.5
+            print(f"Operation {i+1}: {operation_type} on polygons {polygon_ids}")
             
-            coords1 = get_all_coordinates(poly1)
-            coords2 = get_all_coordinates(poly2)
-            
-            # Check if any coordinates from poly1 are within tolerance of any coordinates from poly2
-            for c1 in coords1:
-                for c2 in coords2:
-                    if distance(c1, c2) <= tolerance:
-                        return True
-            
-            # Additional check: see if any line segments are very close
-            # This catches cases where polygons touch along edges but don't share exact vertices
-            for i in range(len(coords1) - 1):
-                line1_start = coords1[i]
-                line1_end = coords1[i + 1]
+            if operation_type == "delete":
+                # Find polygons to delete and calculate area to subtract
+                total_area_to_subtract = 0
+                remaining_features = []
                 
-                for j in range(len(coords2) - 1):
-                    line2_start = coords2[j]
-                    line2_end = coords2[j + 1]
+                for feature in geojson_data["features"]:
+                    if feature["properties"]["id"] in polygon_ids:
+                        total_area_to_subtract += feature["properties"]["area_m2"]
+                        print(f"  Deleting polygon {feature['properties']['id']} with area {feature['properties']['area_m2']}")
+                    else:
+                        remaining_features.append(feature)
+                
+                # Update the GeoJSON data
+                geojson_data["features"] = remaining_features
+                geojson_data["total_area_m2"] -= total_area_to_subtract
+                
+            elif operation_type == "merge":
+                if len(polygon_ids) != 2:
+                    return jsonify({
+                        "success": False, 
+                        "message": f"Merge operation requires exactly 2 polygons, got {len(polygon_ids)}"
+                    })
+                
+                # Find the polygons to merge
+                polygons_to_merge = []
+                remaining_features = []
+                
+                for feature in geojson_data["features"]:
+                    if feature["properties"]["id"] in polygon_ids:
+                        polygons_to_merge.append(feature)
+                    else:
+                        remaining_features.append(feature)
+                
+                if len(polygons_to_merge) != 2:
+                    return jsonify({
+                        "success": False, 
+                        "message": f"Could not find both polygons to merge (found {len(polygons_to_merge)})"
+                    })
+                
+                print(f"  Merging polygons {polygon_ids}")
+                
+                # Check if polygons are contiguous
+                def polygons_are_contiguous(poly1, poly2, tolerance=0.0001):
+                    def get_all_coordinates(poly):
+                        coords = []
+                        if poly["geometry"]["type"] == "Polygon":
+                            for ring in poly["geometry"]["coordinates"]:
+                                coords.extend(ring)
+                        elif poly["geometry"]["type"] == "MultiPolygon":
+                            for polygon in poly["geometry"]["coordinates"]:
+                                for ring in polygon:
+                                    coords.extend(ring)
+                        return coords
                     
-                    # Check if line segments are close
-                    if (distance(line1_start, line2_start) <= tolerance and 
-                        distance(line1_end, line2_end) <= tolerance) or \
-                       (distance(line1_start, line2_end) <= tolerance and 
-                        distance(line1_end, line2_start) <= tolerance):
-                        return True
-            
-            return False
+                    def distance(coord1, coord2):
+                        return ((coord1[0] - coord2[0]) ** 2 + (coord1[1] - coord2[1]) ** 2) ** 0.5
+                    
+                    coords1 = get_all_coordinates(poly1)
+                    coords2 = get_all_coordinates(poly2)
+                    
+                    # Check if any coordinates are within tolerance
+                    for c1 in coords1:
+                        for c2 in coords2:
+                            if distance(c1, c2) <= tolerance:
+                                return True
+                    
+                    # Check if any line segments are close
+                    for i in range(len(coords1) - 1):
+                        line1_start = coords1[i]
+                        line1_end = coords1[i + 1]
+                        
+                        for j in range(len(coords2) - 1):
+                            line2_start = coords2[j]
+                            line2_end = coords2[j + 1]
+                            
+                            if (distance(line1_start, line2_start) <= tolerance and 
+                                distance(line1_end, line2_end) <= tolerance) or \
+                               (distance(line1_start, line2_end) <= tolerance and 
+                                distance(line1_end, line2_start) <= tolerance):
+                                return True
+                    
+                    return False
+                
+                if not polygons_are_contiguous(polygons_to_merge[0], polygons_to_merge[1]):
+                    return jsonify({
+                        "success": False, 
+                        "message": "Selected polygons are not contiguous and cannot be merged"
+                    })
+                
+                # Perform geometric union using Shapely
+                shapely_polygons = []
+                total_area = 0
+                
+                for poly in polygons_to_merge:
+                    shapely_poly = shape(poly["geometry"])
+                    shapely_polygons.append(shapely_poly)
+                    total_area += poly["properties"]["area_m2"]
+                
+                # Create the merged geometry
+                merged_geometry = unary_union(shapely_polygons)
+                merged_area = merged_geometry.area
+                
+                # Handle potential overlap in area calculation
+                if abs(merged_area - sum(poly["properties"]["area_m2"] for poly in polygons_to_merge)) > 0.000001:
+                    overlap_ratio = merged_area / sum(shapely_poly.area for shapely_poly in shapely_polygons)
+                    actual_area = total_area * overlap_ratio
+                else:
+                    actual_area = total_area
+                
+                # Create the new merged polygon
+                merged_polygon = {
+                    "type": "Feature",
+                    "geometry": mapping(merged_geometry),
+                    "properties": {
+                        "id": min(polygon_ids),  # Use the smaller ID
+                        "area_m2": actual_area
+                    }
+                }
+                
+                print(f"  Created merged polygon with ID {merged_polygon['properties']['id']} and area {actual_area}")
+                
+                # Add merged polygon to remaining features
+                remaining_features.append(merged_polygon)
+                geojson_data["features"] = remaining_features
         
-        if not polygons_are_contiguous(polygons_to_merge[0], polygons_to_merge[1]):
-            return jsonify({"success": False, "message": "Selected polygons are not contiguous and cannot be merged"})
-        
-        # Convert GeoJSON geometries to Shapely objects
-        shapely_polygons = []
-        total_area = 0
-        
-        for poly in polygons_to_merge:
-            shapely_poly = shape(poly["geometry"])
-            shapely_polygons.append(shapely_poly)
-            total_area += poly["properties"]["area_m2"]
-        
-        # Perform geometric union to properly merge overlapping areas
-        merged_geometry = unary_union(shapely_polygons)
-        
-        # Calculate the actual area of the merged geometry
-        # Since we're working with geographic coordinates, we need to be careful about area calculation
-        # For now, we'll use the union area but you might want to recalculate this properly
-        merged_area = merged_geometry.area
-        
-        # If the merged area is significantly different from the sum, 
-        # it means there was overlap - use the actual merged area
-        if abs(merged_area - sum(poly["properties"]["area_m2"] for poly in polygons_to_merge)) > 0.000001:
-            # There was overlap, recalculate area properly
-            # Convert back to geographic coordinates and calculate area
-            # For simplicity, we'll estimate the overlap and subtract it
-            overlap_ratio = merged_area / sum(shapely_poly.area for shapely_poly in shapely_polygons)
-            actual_area = total_area * overlap_ratio
-        else:
-            actual_area = total_area
-        
-        # Create merged polygon with proper geometry
-        merged_polygon = {
-            "type": "Feature",
-            "geometry": mapping(merged_geometry),
-            "properties": {
-                "id": min(ids_to_merge),  # Use the smaller ID
-                "area_m2": actual_area
-            }
-        }
-        
-        # Add merged polygon to remaining features
-        remaining_features.append(merged_polygon)
-        
-        # Update the GeoJSON data
-        geojson_data["features"] = remaining_features
-        
-        # Write back to file
+        # Write the updated data back to the file
         with open(file_path, "w") as file:
             json.dump(geojson_data, file)
         
-        return jsonify({"success": True})
+        print(f"Successfully processed {len(operations)} operations")
+        return jsonify({
+            "success": True, 
+            "message": f"Successfully processed {len(operations)} operation{'s' if len(operations) > 1 else ''}"
+        })
     
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error merging polygons: {str(e)}"})
-
-
-@app.route("/removePolygons/<cc>", methods=["POST"])
-@admin_required
-def remove_polygons(cc):
-    ids_to_remove = request.json
-
-    directory_path = "country_percent/countries/processed/"
-    file_path = os.path.join(directory_path, f"{cc}.geojson")
-
-    with open(file_path, "r") as file:
-        geojson_data = json.load(file)
-
-    # Calculate the total area to be subtracted
-    total_area_to_subtract = sum(
-        feature["properties"]["area_m2"]
-        for feature in geojson_data["features"]
-        if feature["properties"]["id"] in ids_to_remove
-    )
-
-    # Subtract the total area to be subtracted from the total_area_m2 property
-    geojson_data["total_area_m2"] -= total_area_to_subtract
-
-    # Filter out polygons based on their ID
-    geojson_data["features"] = [
-        feature
-        for feature in geojson_data["features"]
-        if feature["properties"]["id"] not in ids_to_remove
-    ]
-
-    with open(file_path, "w") as file:
-        json.dump(geojson_data, file)
-
-    return jsonify({"success": True})
+        print(f"Error processing queue: {str(e)}")
+        return jsonify({
+            "success": False, 
+            "message": f"Error processing operations: {str(e)}"
+        })
 
 
 @app.route("/about")
