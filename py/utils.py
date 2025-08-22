@@ -4,6 +4,7 @@ import os
 import time
 import unicodedata
 from urllib.request import urlopen
+from datetime import datetime, timezone
 
 import pycountry
 import yaml
@@ -385,3 +386,20 @@ def interpolate_points_if_gaps(points, max_distance_km=50):
     print(len(interpolated))
 
     return interpolated
+
+
+def time_ago(dt):
+    now = datetime.now(timezone.utc)
+    diff = now - dt
+
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return f"{int(seconds)} seconds ago"
+    elif seconds < 3600:
+        return f"{int(seconds // 60)} minutes ago"
+    elif seconds < 86400:
+        return f"{int(seconds // 3600)} hours ago"
+    elif seconds < 604800:
+        return f"{int(seconds // 86400)} days ago"
+    else:
+        return f"{int(seconds // 604800)} weeks ago"

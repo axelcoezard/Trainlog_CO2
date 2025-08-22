@@ -172,6 +172,7 @@ from py.utils import (
     stringSimmilarity,
     unicodedata,
     validate_png_file,
+    time_ago
 )
 from src.api.admin import admin_blueprint
 from src.api.feature_requests import feature_requests_blueprint
@@ -269,6 +270,7 @@ r = git.repo.Repo("./")
 dashboard.config.version = r.git.describe(tags=True).split("-")[0]
 dashboard.config.group_by = getUser
 dashboard.bind(app)
+latest_commit = r.head.commit
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///{db}".format(db=DbNames.AUTH_DB.value)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -9052,11 +9054,18 @@ def user_bounds(username):
 
 @app.route("/status")
 def router_status():
+    latest_commit_hex = latest_commit.hexsha
+    latest_commit_dt = latest_commit.committed_datetime
+
     return render_template(
         "status.html",
         title=lang[session["userinfo"]["lang"]]["router_status"],
         username=getUser(),
         translations=lang[session["userinfo"]["lang"]],
+        latest_commit_hex=latest_commit_hex,
+        latest_commit_hex_short=latest_commit_hex[:7],
+        latest_commit_display=latest_commit_dt.strftime("%Y-%m-%d %H:%M UTC"),
+        latest_commit_ago=time_ago(latest_commit_dt),
         **lang[session["userinfo"]["lang"]],
         **session["userinfo"],
     )
