@@ -224,6 +224,8 @@
     "error410Body": "Este link de viagem atingiu seu destino final e não embarcará em mais jornadas. Ele se foi permanentemente!",
     "error500Title": "Opa! 500 - Descarrilamento de Trem",
     "error500Body": "Nossos servidores saíram dos trilhos! Estamos trabalhando para colocá-los de volta na rota. Por favor, tente novamente mais tarde.",
+    "error503Title": "Banco de dados ocupado",
+    "error503Body": "Nosso banco de dados está ocupado no momento. Por favor, tente novamente em breve.",
     "error416Title": "Oh céus! 416 - Viagem no Tempo Emaranhada",
     "error416Body": "Parece que você tentou misturar uma viagem agendada com uma aventura sem fim, e agora elas estão todas emaranhadas! Por favor, mantenha viagens definidas e indefinidas separadas. Vamos tentar novamente, certo?",
     "errorDiscordMail": "Se o problema persistir, entre em contato com o suporte em {supportEmail} ou junte-se a nós no {discordLink} oficial do Trainlog.",

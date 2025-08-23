@@ -224,6 +224,8 @@
     "error410Body": "Denne reiselinken har nådd sin endelige destinasjon og vil ikke dra på flere reiser. Den er permanent borte!",
     "error500Title": "Oops! 500 - Togavsporing",
     "error500Body": "Serverne våre har gått av sporet! Vi jobber med å få dem tilbake på rute. Vennligst prøv igjen senere.",
+    "error503Title": "Database opptatt",
+    "error503Body": "Vår database er opptatt akkurat nå. Vennligst prøv igjen om litt.",
     "error416Title": "Å nei! 416 - Tidsreise Forvirret",
     "error416Body": "Det ser ut som vi prøvde å blande en planlagt tur med et åpent eventyr, og nå er alt sammenfiltret! Vennligst hold definitive og udefinerte turer atskilt. La oss prøve igjen, skal vi?",
     "errorDiscordMail": "Hvis problemet vedvarer, vennligst kontakt support på {supportEmail} eller bli med oss på den offisielle Trainlog {discordLink}.",

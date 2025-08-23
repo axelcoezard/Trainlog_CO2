@@ -224,6 +224,8 @@
     "error410Body": "Dieser Reiselink hat sein endgültiges Ziel erreicht und wird keine weiteren Reisen unternehmen. Es ist dauerhaft weg!",
     "error500Title": "Hoppla! 500 – Zugentgleisung",
     "error500Body": "Unsere Server sind aus dem Ruder gelaufen! Wir arbeiten daran, sie wieder auf die Strecke zu bringen. Bitte versuchen Sie es später noch einmal.",
+    "error503Title": "Datenbank beschäftigt",
+    "error503Body": "Unsere Datenbank ist momentan beschäftigt. Bitte versuchen Sie es in Kürze erneut.",
     "error416Title": "Oh je! 416 - Zeitreise Verwirrung",
     "error416Body": "Es scheint, als hätten wir versucht, eine geplante Reise mit einem offenen Abenteuer zu vermischen, und jetzt ist alles durcheinander! Bitte halten Sie definierte und undefinierte Reisen getrennt. Sollen wir es noch einmal versuchen?",
     "errorDiscordMail": "Wenn das Problem weiterhin besteht, wenden Sie sich bitte an den Support unter {supportEmail} oder treten Sie unserem offiziellen Trainlog {discordLink} bei.",

@@ -224,6 +224,8 @@
     "error410Body": "Selle reisi link on jõudnud oma lõppsihtkohta ja ei alusta enam uusi teekondi. See on jäädavalt kadunud!",
     "error500Title": "Ups! 500 - Rong läks rööbastelt maha",
     "error500Body": "Meie serverid on rajalt kõrvale kaldunud! Töötame selle nimel, et need uuesti õigele marsruudile saada. Palun proovige hiljem uuesti.",
+    "error503Title": "Andmebaas hõivatud",
+    "error503Body": "Meie andmebaas on praegu hõivatud. Palun proovige varsti uuesti.",
     "error416Title": "Oh kallis! 416 - Ajas rändamise segadus",
     "error416Body": "Tundub, et proovisime segada plaanitud reisi lõpmatu seiklusega ja nüüd on kõik sassis! Palun hoidke kindlad ja lõpmatud reisid lahus. Proovime uuesti, eks?",
     "errorDiscordMail": "Kui probleem püsib, võtke ühendust toega aadressil {supportEmail} või liituge meiega ametlikul Trainlog {discordLink}.",

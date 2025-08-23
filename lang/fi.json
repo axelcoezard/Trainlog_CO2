@@ -224,6 +224,8 @@
     "error410Body": "Tämä matkalinkki on saavuttanut lopullisen määränpäänsä eikä se enää mene mihinkään. (Verkkosivu poistettu.)",
     "error500Title": "Hups! 500 - Juna suistui raiteilta",
     "error500Body": "Serverimme ovat suistuneet raiteiltaan! Työskentelemme saadaksemme ne takaisin raiteilleen. Yritä myöhemmin uudelleen.",
+    "error503Title": "Tietokanta varattu",
+    "error503Body": "Tietokantamme on tällä hetkellä varattu. Yritäthän uudelleen hetken kuluttua.",
     "error416Title": "Voi ei! 416 - Ajassa matkustaminen ei onnistu",
     "error416Body": "Näyttää siltä, ​​että yritimme sekoittaa suunnitellun matkan päättymättömään seikkailuun, ja nyt ne ovat täysin sekaisin! Pidähän epävarmat ja varmat matkat erillään.",
     "errorDiscordMail": "Jos ongelma ei ratkea itsestään, ota yhteyttä tukeen osoitteessa {supportEmail} tai liity Trainlogin {discordLink}-kanavalle.",

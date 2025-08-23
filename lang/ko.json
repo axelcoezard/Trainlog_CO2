@@ -224,6 +224,8 @@
     "error410Body": "이 여행 링크가 목적지에 도착해 더 이상 여행을 계속하지 않아요. 영원히 사라졌어요!",
     "error500Title": "이런! 500 - 열차 탈선",
     "error500Body": "서버가 경로를 이탈했어요! 저희가 길 위에 되돌려 놓기 위해 노력하고 있어요. 나중에 다시 시도하세요.",
+    "error503Title": "데이터베이스 사용 중",
+    "error503Body": "현재 저희 데이터베이스가 사용 중입니다. 잠시 후 다시 시도해 주세요.",
     "error416Title": "세상에! 416 - 시간 여행 꼬임",
     "error416Body": "It seems like you've tried to mix a scheduled trip with an open-ended adventure, and now they're all tangled up! Please keep definite and indefinite trips separate. Let's try again, shall we?",
     "errorDiscordMail": "문제가 지속되면, {supportEmail}로 문의하거나 공식 Trainlog {discordLink}에 참여하세요.",

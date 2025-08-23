@@ -224,6 +224,8 @@
     "error410Body": "De Reiselink het sis endgültige Ziel erreicht und wird kei wiiteri Reise unterneh. Er isch für immer weg!",
     "error500Title": "Hoppla! 500 – Zugentgleisig",
     "error500Body": "Üsi Server sind entgleist! Mer schaffed dra, sie wieder uf d Schiene z stelle. Bitte versuched Sie s spöter nomol.",
+    "error503Title": "Datebank bsatzt",
+    "error503Body": "Üsi Datebank isch im Momänt bsatzt. Bitte versuech's schpöter nomol.",
     "error416Title": "Oh je! 416 - Zeitreise Verwirrig",
     "error416Body": "Es schiint, als hettemer versuecht, e planti Reis mit emne offene Abentüür zu vermische, und jetzt isch alles durenand! Bitte halted Sie definierti und undefinierti Reisen trennt. Söllemers nomol versueche?",
     "errorDiscordMail": "Wenn s Problem wiiterhin bestoht, wended Sie sich bitte an Support unter {supportEmail} oder tretet Sie üserem offizielle Trainlog {discordLink} bi.",

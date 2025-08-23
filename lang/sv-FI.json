@@ -224,6 +224,8 @@
     "error410Body": "Denna reslänk har nått sin slutdestination och kommer inte att ge sig ut på fler resor. Den är borta permanent! (Sidan har tagits bort)",
     "error500Title": "Nå nej! 500 - Tågurspårning",
     "error500Body": "Våra servrar har gått av spåret! Vi arbetar för att få dem tillbaka på rutten. Försök på nytt senare.",
+    "error503Title": "Databasen upptagen",
+    "error503Body": "Vår databas är upptagen just nu. Försök igen om en stund.",
     "error416Title": "Nå nej! 416 - Tidsresa Trassligt",
     "error416Body": "Det verkar som att vi försökte blanda en inplanerad resa med ett öppet äventyr, och nu är allt blandat! Vänligen håll bestämda och obestämda resor separerade. Ska vi försöka igen, ska vi inte?",
     "errorDiscordMail": "Om problemet inte försvinner av sig själv, kontakta supporten på {supportEmail} eller gå med i vår officiella {discordLink}-kanal.",

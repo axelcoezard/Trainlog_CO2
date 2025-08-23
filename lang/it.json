@@ -224,6 +224,8 @@
     "error410Body": "Questo link ha raggiunto la sua destinazione finale e non partirà più per un altro viaggio... Se n'è andato definitivamente!",
     "error500Title": "Ops! 500 - Deragliamento del treno",
     "error500Body": "I nostri server hanno deragliato! Stiamo lavorando per rimetterli in carreggiata. Riprova più tardi.",
+    "error503Title": "Database occupato",
+    "error503Body": "Il nostro database è occupato in questo momento. Per favore, riprova tra poco.",
     "error416Title": "Oh no! 416 - Viaggio nel tempo Ingrovigliato",
     "error416Body": "Sembra che abbiamo cercato di mescolare un viaggio programmato con un'avventura a cielo aperto, e ora sono tutti ingarbugliati! Per favore, tenete separati i viaggi definiti e indefiniti. Proviamo di nuovo, che ne dici?",
     "errorDiscordMail": "Se il problema persiste, contattare il supporto all'indirizzo {supportEmail} o unirsi a noi su Trainlog ufficiale {discordLink}.",

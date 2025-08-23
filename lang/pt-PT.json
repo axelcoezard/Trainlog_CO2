@@ -224,6 +224,8 @@
     "error410Body": "A ligação para esta viagem chegou ao seu destino final e não embarcará em mais viagem nenhuma. Foi de vez!",
     "error500Title": "Ai! 500 - Descarrilamento do comboio",
     "error500Body": "Os nossos servidores saltaram dos carris! Estamos a trabalhar para os voltar a pôr a caminho. Por favor, tenta mais tarde.",
+    "error503Title": "Base de dados ocupada",
+    "error503Body": "A nossa base de dados está ocupada neste momento. Por favor, tente novamente em breve.",
     "error416Title": "Oh, céus! 416 - Viagem no tempo misturada",
     "error416Body": "Parece que tentaste misturar uma viagem agendada com uma aventura sem data definida, e ficou tudo emaranhado! Por favor, mantém as viagens com e sem data separadas. Vamos tentar de novo, pode ser?",
     "errorDiscordMail": "Se o problema persistir, por favor contata o suporte para {supportEmail} ou junta-te a nós no Discord oficial do Trainlog {discordLink}.",

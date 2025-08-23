@@ -224,6 +224,8 @@
     "error410Body": "This trip link has reached its final destination and won't be embarking on any more journeys. It's permanently gone!",
     "error500Title": "Whoops! 500 - Train Derailment",
     "error500Body": "Our servers have gone off track! We're working to get them back on route. Please try again later.",
+    "error503Title": "Database busy",
+    "error503Body": "Our database is busy right now. Please try again shortly.",
     "error416Title": "Oh dear! 416 - Time Travel Tangled",
     "error416Body": "It seems like you've tried to mix a scheduled trip with an open-ended adventure, and now they're all tangled up! Please keep definite and indefinite trips separate. Let's try again, shall we?",
     "errorDiscordMail": "If the problem persists, please contact support at {supportEmail} or join us on the official Trainlog {discordLink}.",

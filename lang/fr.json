@@ -224,6 +224,8 @@
     "error410Body": "Ce lien de voyage a atteint sa destination finale et n'ira plus en voyage... Il est définitivement parti!",
     "error500Title": "Oups! 500 - Déraillement du train",
     "error500Body": "Nos serveurs ont déraillé! Nous travaillons pour les remettre sur la bonne voie. Veuillez réessayer plus tard.",
+    "error503Title": "Base de données en dérangement",
+    "error503Body": "Notre base de données est momentanément bloquée. Veuillez réessayer dans quelques instants.",
     "error416Title": "Oh là là ! 416 - Voyage dans le temps embrouillé",
     "error416Body": "Il semble que nous ayons essayé de mélanger un voyage planifié avec une aventure sans fin définie, et maintenant tout est embrouillé ! Veuillez garder les voyages définis et indéfinis séparés. Essayons à nouveau, d'accord ?",
     "errorDiscordMail": "Si le problème persiste, veuillez contacter le support à {supportEmail} ou nous rejoindre sur le {discordLink} officiel de Trainlog.",

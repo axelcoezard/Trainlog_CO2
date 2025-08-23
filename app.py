@@ -56,6 +56,7 @@ from flask import (
     send_from_directory,
     session,
     url_for,
+    g
 )
 from flask_caching import Cache
 from flask_compress import Compress
@@ -71,6 +72,7 @@ from timezonefinder import TimezoneFinder
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+import sqlite3
 
 # Set the working directory to the app root
 # this must be before we try to read the config, or any file
@@ -1205,16 +1207,22 @@ def before_request():
 
 @app.context_processor
 def inject_distinct_types():
-    if "userinfo" not in session:
-        return {}
+    # 1) If we’re rendering an error page, don’t touch the DB
+    if getattr(g, "suppress_context_queries", False):
+        return {"distinctTypes": {}}
 
-    username = session["userinfo"].get("logged_in_user")
-    lang_code = session["userinfo"].get("lang")
-
+    # 2) Safe session lookups
+    userinfo = session.get("userinfo") or {}
+    username = userinfo.get("logged_in_user")
+    lang_code = userinfo.get("lang", "en")
     if not username:
-        return {}
+        return {"distinctTypes": {}}
 
-    # Icon mapping
+    # 3) If we already computed it during this request, reuse it
+    if hasattr(g, "distinct_types_ctx"):
+        return {"distinctTypes": g.distinct_types_ctx}
+
+    # 4) Icon mapping
     icon_map = {
         "train": "fa-solid fa-train",
         "tram": "fa-solid fa-train-tram",
@@ -1229,25 +1237,36 @@ def inject_distinct_types():
         "car": "fa-solid fa-car-side",
     }
 
-    with managed_cursor(mainConn) as cursor:
-        cursor.execute(
-            """
-            SELECT DISTINCT type FROM trip
-            WHERE username = ?
-              AND type NOT IN ('poi', 'accommodation', 'restaurant')
-            """,
-            (username,),
-        )
-        types = {
-            row[0]: {
-                "label": lang[lang_code].get(row[0], row[0]),
-                "icon": icon_map.get(row[0], "fa-solid fa-question"),
-            }
-            for row in cursor.fetchall()
+    # 5) Query, but fail soft if DB is locked (or anything else goes wrong)
+    try:
+        with managed_cursor(mainConn) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT type
+                FROM trip
+                WHERE username = ?
+                  AND type NOT IN ('poi', 'accommodation', 'restaurant')
+                """,
+                (username,),
+            )
+            rows = cursor.fetchall()
+    except Exception as err:
+        logger.exception("Context processor failed: inject_distinct_types")
+        g.distinct_types_ctx = {}  # cache the empty fallback to avoid retries
+        return {"distinctTypes": {}}
+
+    # 6) Build the dict with localized labels
+    lang_dict = lang.get(lang_code, {})
+    types = {
+        r[0]: {
+            "label": lang_dict.get(r[0], r[0]),
+            "icon": icon_map.get(r[0], "fa-solid fa-question"),
         }
+        for r in rows
+    }
 
+    g.distinct_types_ctx = types
     return {"distinctTypes": types}
-
 
 @app.route("/robots.txt")
 def robots_txt():
@@ -7510,33 +7529,53 @@ def handle_405(e):
 @app.errorhandler(410)
 @app.errorhandler(416)
 @app.errorhandler(500)
+@app.errorhandler(sqlite3.OperationalError)   # handle db errors
+@app.errorhandler(Exception)                  # catch-all
 def handle_error(e):
-    logger.error(e)
-    error_code = getattr(e, "code", 500)  # Default to 500 if no code attribute
-    template_data = {
-        "errorTitle": lang[session["userinfo"]["lang"]].get(
-            f"error{error_code}Title", "Error"
-        ),
-        "errorHeader": lang[session["userinfo"]["lang"]].get(
-            f"error{error_code}Title", "Error"
-        ),
-        "errorImagePath": url_for("static", filename=f"images/errors/{error_code}.png"),
-        "errorBody": lang[session["userinfo"]["lang"]].get(
-            f"error{error_code}Body", "An error occurred."
-        ),
-    }
-    if getUser() == "public":
-        nav = "bootstrap/no_user_nav.html"
+    # Let context processors know to skip DB work
+    g.suppress_context_queries = True
+
+    # Decide error code
+    if isinstance(e, HTTPException):
+        logger.error("%s %s", e.code, e.description)
+        error_code = e.code
+    elif isinstance(e, sqlite3.OperationalError):
+        logger.exception("Unhandled sqlite error", exc_info=e)
+        # use 503 for "database is locked", otherwise generic 500
+        error_code = 503 if "database is locked" in str(e).lower() else 500
     else:
-        nav = "bootstrap/navigation.html"
-    return render_template(
-        "errors.html",
-        nav=nav,
-        username=getUser(),
-        **template_data,
-        **lang[session["userinfo"]["lang"]],
-        **session["userinfo"],
-    ), error_code
+        logger.exception("Unhandled exception", exc_info=e)
+        error_code = 500
+
+    # Safe language/session lookups
+    userinfo = session.get("userinfo", {}) or {}
+    lang_code = userinfo.get("lang", "en")
+    lang_dict = lang.get(lang_code, {})
+
+    # Unified language keys
+    title_key = f"error{error_code}Title"
+    body_key  = f"error{error_code}Body"
+
+    template_data = {
+        "errorTitle":  lang_dict.get(title_key, "Error"),
+        "errorHeader": lang_dict.get(title_key, "Error"),
+        "errorImagePath": url_for("static", filename=f"images/errors/{error_code}.png"),
+        "errorBody":   lang_dict.get(body_key, "An error occurred."),
+    }
+
+    nav = "bootstrap/no_user_nav.html" if getUser() == "public" else "bootstrap/navigation.html"
+
+    return (
+        render_template(
+            "errors.html",
+            nav=nav,
+            username=getUser(),
+            **template_data,
+            **lang_dict,
+            **userinfo,
+        ),
+        error_code,
+    )
 
 
 @app.route("/<int:error_code>")

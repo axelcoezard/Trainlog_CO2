@@ -224,6 +224,8 @@
     "error410Body": "Deze reislink heeft zijn eindbestemming bereikt en gaat niet meer op reis. Het is permanent weg!",
     "error500Title": "Oeps! 500 - Trein ontspoord",
     "error500Body": "Onze servers zijn van het spoor geraakt! We werken eraan om ze weer op het juiste spoor te krijgen. Probeer het later opnieuw.",
+    "error503Title": "Database bezet",
+    "error503Body": "Onze database is op dit moment bezet. Probeer het zo meteen opnieuw.",
     "error416Title": "O jee! 416 - Tijdreizen Verward",
     "error416Body": "Het lijkt erop dat we een geplande reis met een open avontuur hebben geprobeerd te mengen, en nu is alles door elkaar! Houd alsjeblieft definitieve en onbepaalde reizen gescheiden. Kom, laten we het opnieuw proberen.",
     "errorDiscordMail": "Als het probleem zich blijft voordoen, neem dan contact op met de ondersteuning via {supportEmail} of sluit je aan bij ons op de officiële Trainlog {discordLink}.",

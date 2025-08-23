@@ -224,6 +224,8 @@
     "error410Body": "Este enlace de viaje ha llegado a su destino final y no embarcará en más viajes. ¡Se ha ido permanentemente!",
     "error500Title": "¡Ups! 500 - Descarrilamiento del Tren",
     "error500Body": "¡Nuestros servidores se han desviado del camino! Estamos trabajando para que vuelvan a la ruta. Por favor, intenta de nuevo más tarde.",
+    "error503Title": "Base de datos ocupada",
+    "error503Body": "Nuestra base de datos está ocupada en este momento. Por favor, inténtalo de nuevo en breve.",
     "error416Title": "¡Ay caramba! 416 - Viaje en el tiempo enredado",
     "error416Body": "Parece que intentamos mezclar un viaje programado con una aventura sin final definido, ¡y ahora todo está enredado! Por favor, mantenga separados los viajes definidos e indefinidos. ¿Lo intentamos de nuevo, de acuerdo?",
     "errorDiscordMail": "Si el problema persiste, por favor contacta al soporte en {supportEmail} o únete a nosotros en el Trainlog oficial {discordLink}.",

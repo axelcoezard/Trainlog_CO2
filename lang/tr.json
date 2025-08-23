@@ -224,6 +224,8 @@
     "error410Body": "Bu yolculuk linki son istasyonuna ulaştı ve başka bir yolculuğa çıkmayacak. Sonsuza kadar gitti!",
     "error500Title": "500 - Raydan Çıktı!",
     "error500Body": "Sunucularımız raydan çıkmış gibi görünüyor. An itibariyle kendilerini raya tekrar sokmakla meşguluz. Lütfen bir süre sonra tekrar deneyin!",
+    "error503Title": "Veritabanı meşgul",
+    "error503Body": "Şu anda veritabanımız meşgul. Lütfen kısa bir süre sonra tekrar deneyin.",
     "error416Title": "Aman! 416 - Zaman Yolculuğu Karışık",
     "error416Body": "Görünüşe göre planlanmış bir geziyi, açık uçlu bir macerayla karıştırmaya çalıştık ve şimdi hepsi karıştı! Lütfen kesin ve belirsiz gezileri ayrı tutun. Tekrar deneyelim, ne dersiniz?",
     "errorDiscordMail": "Sorun devam ederse, lütfen {supportEmail} adresinden destek ile iletişime geçin veya resmi Trainlog {discordLink} sayfamıza katılın.",

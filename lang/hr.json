@@ -224,6 +224,8 @@
     "error410Body": "Ova veza putovanja je dosegnula svoje konačno odredište i neće se upuštati u daljnja putovanja. Zauvijek je nestala!",
     "error500Title": "Ups! 500 - Iskakanje vlaka",
     "error500Body": "Naši poslužitelji su skrenuli s pruge! Radimo na tome da ih vratimo na putanju. Pokušajte ponovno kasnije.",
+    "error503Title": "Baza podataka zauzeta",
+    "error503Body": "Naša baza podataka je trenutno zauzeta. Molimo pokušajte ponovno uskoro.",
     "error416Title": "Oh dragi! 416 - Zamršeno putovanje kroz vrijeme",
     "error416Body": "Čini se da smo pokušali pomiješati zakazano putovanje s avanturom bez određenog cilja, i sada su svi zapetljani! Molimo držite definitivna i nedorečena putovanja odvojeno. Pokušajmo ponovno, zar ne?",
     "errorDiscordMail": "Ako problem i dalje postoji, obratite se podršci na {supportEmail} ili nam se pridružite na službenom Trainlog {discordLink}.",
