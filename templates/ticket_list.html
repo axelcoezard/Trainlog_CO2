@@ -191,7 +191,9 @@ $(document).ready(function () {
         // Update tooltips with country names
         $('.flag[data-bs-toggle="tooltip"]').each(function() {
             const countryCode = $(this).attr('title');
-            $(this).attr('title', regionNames.of(countryCode));
+            if (typeof countryCode === "string" && countryCode.length === 2) {
+                $(this).attr('title', regionNames.of(countryCode));
+            }
         });
         
         // Initialize tooltips
