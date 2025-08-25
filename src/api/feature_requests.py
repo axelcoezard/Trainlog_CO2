@@ -60,7 +60,6 @@ def feature_requests(username=None):
                 'score': req[8],
                 'user_vote': req[9] if len(req) > 9 else 0
             }
-            logger.info(f"Feature request: ID={req[0]}, Title={req[1]}")
             request_list.append(request_dict)
 
     return render_template(
