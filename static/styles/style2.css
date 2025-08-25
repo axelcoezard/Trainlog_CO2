@@ -206,7 +206,7 @@ td.child table tr td{
 
 
 th {
-  background-color: #207cca;
+  background-color: #207cca !important;
   color: white;
 }
 

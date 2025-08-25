@@ -3,87 +3,108 @@
 {% block content %}
 {% include "bootstrap/navigation.html" %}
 
-<div class="container mt-4">
+<style>
+    @media (min-width: 1400px) {
+        .container-xxl{
+            max-width: 1800px;
+        }
+    }
+</style>
+
+<div class="container-xxl mt-4 mb-4">
     <div class="row">
-        <div class="col-md-12">
-            <h2>{{nav_tickets}}</h2>
-            <table id="ticketsTable" class="mt-3">
-                <thead>
-                    <tr>
-                        <th data-priority="1">{{ticket_name}}</th>
-                        <th>{{price}}</th>
-                        <th data-priority="2">{{purchasing_date}}</th>
-                        <th>{{trips}}</th>
-                        <th>{{price_per_trip}}</th>
-                        <th>{{price_per_km}}</th>
-                        <th data-orderable="false" data-priority="1">{{active}}</th>
-                        <th data-orderable="false">{{ticketCountries}}</th>
-                        <th>{{notes}}</th>
-                        <th data-orderable="false" data-priority="1"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ticket in tickets %}
-                    <tr id="row_{{ ticket.uid }}">
-                        <td>{{ ticket.name }}</td>
-                        <td class="price-format" data-price="{{ ticket.price }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
-                            <span><span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_in_user_currency }}</span></span>
-                        </td>
-                        <td>{{ ticket.purchasing_date }}</td>
-                        <td>
-                            {% if ticket.trip_ids %}
-                                <a class="leaderboardLink link-dark" href="{{ url_for('public_trip', ticketId=ticket.uid) }}?price">{{ ticket.trip_count }}</a>
-                            {% else %}
-                                {{ ticket.trip_count }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if ticket.price_per_trip %}
-                                <span class="price-format" data-price="{{ ticket.price_per_trip }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_trip_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
-                                    <span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price_per_trip }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_trip_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_per_trip_in_user_currency }}</span>
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if ticket.price_per_km %}
-                                <span class="price-format" data-price="{{ ticket.price_per_km }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_km_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
-                                    <span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price_per_km }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_km_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_per_km_in_user_currency }}</span>
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="form-check form-switch form-check-inline">
-                                <input class="form-check-input float-end ticket-active-checkbox"
-                                       type="checkbox"
-                                       role="switch"
-                                       data-ticket-id="{{ ticket.uid }}"
-                                        {% if ticket.active %}
-                                            checked
-                                        {%endif%}
-                                       >
-                            </div>
-                        </td>
-                        <td>
-                            {% if ticket.active_countries %}
-                                <div class="country-flags-container">
-                                    {% for country in ticket.active_countries.split(',') %}
-                                        <span class="flag" data-bs-toggle="tooltip" style="cursor:context-menu;" data-bs-placement="top" title="{{ country }}">{{ country_list[country] }}</span>
-                                    {% endfor %}
+        <div class="col-12">
+            <h2 class="mb-4">{{nav_tickets}}</h2>
+            <div class="table-responsive">
+                <table id="ticketsTable" class="table table-hover w-100">
+                    <thead class="table-light">
+                        <tr>
+                            <th data-priority="1" class="px-3 py-3 border-0">{{ticket_name}}</th>
+                            <th class="px-3 py-3 border-0">{{price}}</th>
+                            <th data-priority="2" class="px-3 py-3 border-0">{{purchasing_date}}</th>
+                            <th class="px-3 py-3 border-0">{{trips}}</th>
+                            <th class="px-3 py-3 border-0">{{price_per_trip}}</th>
+                            <th class="px-3 py-3 border-0">{{price_per_km}}</th>
+                            <th data-orderable="false" data-priority="1" class="px-3 py-3 text-center border-0">{{active}}</th>
+                            <th data-orderable="false" class="px-3 py-3 text-center border-0">{{ticketCountries}}</th>
+                            <th class="px-3 py-3 border-0">{{notes}}</th>
+                            <th data-orderable="false" data-priority="1" class="px-3 py-3 text-center border-0"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ticket in tickets %}
+                        <tr id="row_{{ ticket.uid }}">
+                            <td class="px-3 py-3 fw-medium border-0">{{ ticket.name }}</td>
+                            <td class="px-3 py-3 price-format border-0" data-price="{{ ticket.price }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
+                                <span><span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_in_user_currency }}</span></span>
+                            </td>
+                            <td class="px-3 py-3 border-0">{{ ticket.purchasing_date }}</td>
+                            <td class="px-3 py-3 border-0">
+                                {% if ticket.trip_ids %}
+                                    <a class="leaderboardLink link-dark text-decoration-none fw-medium" href="{{ url_for('public_trip', ticketId=ticket.uid) }}?price">{{ ticket.trip_count }}</a>
+                                {% else %}
+                                    {{ ticket.trip_count }}
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 border-0">
+                                {% if ticket.price_per_trip %}
+                                    <span class="price-format" data-price="{{ ticket.price_per_trip }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_trip_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
+                                        <span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price_per_trip }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_trip_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_per_trip_in_user_currency }}</span>
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 border-0">
+                                {% if ticket.price_per_km %}
+                                    <span class="price-format" data-price="{{ ticket.price_per_km }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_km_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">
+                                        <span style="display:none;" class="price-format-hidden" data-price="{{ ticket.price_per_km }}" data-currency="{{ ticket.currency }}" data-user-price="{{ ticket.price_per_km_in_user_currency }}" data-user-currency="{{ ticket.user_currency }}">{{ ticket.price_per_km_in_user_currency }}</span>
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 text-center border-0">
+                                <div class="form-check form-switch d-flex justify-content-center">
+                                    <input class="form-check-input ticket-active-checkbox"
+                                           type="checkbox"
+                                           role="switch"
+                                           data-ticket-id="{{ ticket.uid }}"
+                                            {% if ticket.active %}
+                                                checked
+                                            {%endif%}
+                                           >
                                 </div>
-                            {% endif %}
-                        </td>
-                        <td>{{ ticket.notes }}</td>
-                        <td>
-                            <button class="btn btn-warning editButton" data-ticket-id="{{ ticket.uid }}" data-ticket-name="{{ ticket.name }}" data-ticket-price="{{ ticket.price }}" data-ticket-currency="{{ ticket.currency }}" data-ticket-date="{{ ticket.purchasing_date }}" data-ticket-notes="{{ ticket.notes }}" data-ticket-active-countries="{{ ticket.active_countries }}" ><i class="fa-regular fa-pen-to-square"></i></button>
-                            <button class="btn btn-danger deleteButton" data-ticket-id="{{ ticket.uid }}"><i class="fa-regular fa-trash-can"></i></button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                            <td class="px-3 py-3 text-center border-0">
+                                {% if ticket.active_countries %}
+                                    <div class="country-flags-container">
+                                        {% for country in ticket.active_countries.split(',') %}
+                                            <span class="flag me-1" data-bs-toggle="tooltip" style="cursor:context-menu;" data-bs-placement="top" title="{{ country }}">{{ country_list[country] }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 border-0">
+                                {% if ticket.notes %}
+                                    <span class="text-muted">{{ ticket.notes }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 text-center border-0">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-warning editButton" data-ticket-id="{{ ticket.uid }}" data-ticket-name="{{ ticket.name }}" data-ticket-price="{{ ticket.price }}" data-ticket-currency="{{ ticket.currency }}" data-ticket-date="{{ ticket.purchasing_date }}" data-ticket-notes="{{ ticket.notes }}" data-ticket-active-countries="{{ ticket.active_countries }}">
+                                        <i class="fa-regular fa-pen-to-square"></i>
+                                    </button>
+                                    <button class="btn btn-danger deleteButton" data-ticket-id="{{ ticket.uid }}">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
+<div class="mb-4 mt-4"></div>
 
 <!-- Edit Ticket Modal -->
 <div class="modal fade" id="editTicketModal" tabindex="-1" aria-labelledby="editTicketModalLabel" aria-hidden="true">
@@ -129,7 +150,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="editTicketNotes" class="form-label">Notes</label>
-                        <textarea class="form-control" id="editTicketNotes" name="notes"></textarea>
+                        <textarea class="form-control" id="editTicketNotes" name="notes" rows="3"></textarea>
                     </div>
                     <input type="hidden" id="editTicketId" name="ticket_id">
                     <button type="submit" class="btn btn-primary">Save changes</button>
@@ -138,6 +159,19 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Fix DataTables responsive control positioning */
+table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control,
+table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control {
+    position: relative;
+    padding-left: 40px !important;
+    cursor: pointer;
+}
+table > :not(:first-child) {
+    border-top: none !important;
+}
+</style>
 
 <script>
 $(document).ready(function () {
@@ -157,12 +191,12 @@ $(document).ready(function () {
                                 var formattedPrice = formatCurrency("{{ langId }}", price, currency);
                                 var formattedUserPrice = formatCurrency("{{ langId }}", userPrice, userCurrency);
                                 if (Math.abs(price) == 0.0){
-                                    content = '{{free}}';
+                                    content = '<span class="text-success">{{free}}</span>';
                                 }
                                 else if (price != userPrice) {
-                                    content = formattedUserPrice + ' (' + formattedPrice + ')';
+                                    content = '<span class="text-primary">' + formattedUserPrice + '</span> <span class="text-muted">(' + formattedPrice + ')</span>';
                                 } else {
-                                    content = formattedPrice;
+                                    content = '<span class="fw-medium">' + formattedPrice + '</span>';
                                 }
                             } else {
                                 content = col.data;
@@ -180,7 +214,7 @@ $(document).ready(function () {
                     }).join('');
 
                     return data ?
-                        $('<table/>').append(data) :
+                        $('<table class="table table-sm"/>').append(data) :
                         false;
                 }
             }
@@ -207,13 +241,14 @@ $(document).ready(function () {
             var userCurrency = $(this).data('user-currency');
             var formattedPrice = formatCurrency("{{ langId }}", price, currency);
             var formattedUserPrice = formatCurrency("{{ langId }}", userPrice, userCurrency);
+            
             if (Math.abs(price) == 0.0){
-                $(this).text('{{free}}');
+                $(this).html('<span class="text-success">{{free}}</span>');
             }
             else if (price != userPrice) {
-                $(this).text(formattedUserPrice + ' (' + formattedPrice + ')');
+                $(this).html('<span class="text-primary">' + formattedUserPrice + '</span> <span class="text-muted">(' + formattedPrice + ')</span>');
             } else {
-                $(this).text(formattedPrice);
+                $(this).html('<span class="fw-medium">' + formattedPrice + '</span>');
             }
         });
 
