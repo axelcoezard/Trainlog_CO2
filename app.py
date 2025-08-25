@@ -2190,6 +2190,8 @@ def ticket_list(username):
 
     for ticket in tickets:
         end_ticket = dict(ticket)
+        # Avoid colons and ampersand to avoid breaking datatables
+        end_ticket = {k: v.replace(":", "∶").replace("&", "＆") for k, v in dict(ticket).items() if isinstance(v, str)}
         end_ticket["user_currency"] = user_currency
 
         # Convert basic price
