@@ -9231,6 +9231,31 @@ def user_completion(username):
 
     return jsonify({"countries": countries, "regions": regions})
 
+@app.route('/sitemap.xml', methods=['GET'])
+def sitemap():
+    # Only list the routes you want
+    pages = [
+        url_for('landing', _external=True),
+        url_for('login', _external=True),
+        url_for('signup', _external=True),
+        url_for('privacy', _external=True),
+    ]
+
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+    xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+
+    for page in pages:
+        xml.append("  <url>")
+        xml.append(f"    <loc>{page}</loc>")
+        xml.append("  </url>")
+
+    xml.append("</urlset>")
+    sitemap_xml = "\n".join(xml)
+
+    response = make_response(sitemap_xml)
+    response.headers['Content-Type'] = 'application/xml'
+    return response
+
 
 @app.route("/<username>/dashboard")
 @login_required
