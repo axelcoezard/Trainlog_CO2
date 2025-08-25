@@ -431,20 +431,6 @@ def fr24_usage(username):
         row = cursor.fetchone() or (0,)
     return row[0]
 
-
-@app.errorhandler(Exception)
-def all_exception_handler(error):
-    logger.exception(error)
-
-    # send an email to the owner if not running the app locally
-    if not "127.0.0.1" in request.url and not "localhost" in request.url:
-        trace = traceback.format_exc().replace("\n", "<br>")
-        msg = "URL : {} <br><br> Logged in user : {}<br><br> Trace : <br><br>{}".format(
-            request.url, getUser(), trace
-        )
-        sendOwnerEmail("Error : " + str(error), msg)
-
-
 class User(authDb.Model):
     uid = authDb.Column(authDb.Integer, primary_key=True)
     username = authDb.Column(authDb.String(100), unique=True, nullable=False)
@@ -7535,7 +7521,7 @@ def handle_error(e):
     # Let context processors know to skip DB work
     g.suppress_context_queries = True
 
-    # Decide error code
+    # Decide error code + log
     if isinstance(e, HTTPException):
         logger.error("%s %s", e.code, e.description)
         error_code = e.code
@@ -7546,6 +7532,22 @@ def handle_error(e):
     else:
         logger.exception("Unhandled exception", exc_info=e)
         error_code = 500
+
+    # Send email only for server errors (>=500)
+    if error_code >= 500:
+        try:
+            url = request.url or ""
+            if "127.0.0.1" not in url and "localhost" not in url:
+                trace = traceback.format_exc().replace("\n", "<br>")
+                msg = (
+                    f"URL : {url} <br><br>"
+                    f"Logged in user : {getUser()}<br><br>"
+                    f"Trace : <br><br>{trace}"
+                )
+                subject = f"Error {error_code}: {str(e)}"
+                sendOwnerEmail(subject, msg)
+        except Exception as email_err:
+            logger.error("Failed to send owner email: %s", email_err)
 
     # Safe language/session lookups
     userinfo = session.get("userinfo", {}) or {}
