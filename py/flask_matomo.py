@@ -10,7 +10,7 @@ import httpx
 from flask import g, request
 
 logger = logging.getLogger("flask_matomo2")
-
+logging.getLogger("httpx._client").setLevel(logging.WARNING)
 
 class Matomo:
     """The Matomo object provides the central interface for interacting with Matomo.
