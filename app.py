@@ -7532,8 +7532,21 @@ def handle_error(e):
 
     # Decide error code + log
     if isinstance(e, HTTPException):
-        logger.error("%s %s", e.code, e.description)
         error_code = e.code
+        user = getUser()
+        if 400 <= error_code < 500:
+            # Short description for client errors
+            short_desc = e.name or "Client Error"
+            logger.warning(
+                "%s %s (URL: %s, User: %s)",
+                error_code, short_desc, request.url, user
+            )
+        else:
+            # Server-side HTTP errors
+            logger.error(
+                "%s %s (URL: %s, User: %s)",
+                error_code, e.name or "Server Error", request.url, user
+            )
     elif isinstance(e, sqlite3.OperationalError):
         logger.exception("Unhandled sqlite error", exc_info=e)
         # use 503 for "database is locked", otherwise generic 500
