@@ -504,14 +504,12 @@ class Friendship(authDb.Model):
 def fetch_and_filter_flights(flight_filter_key, flight_filter_value, target_date):
     from_iso = f"{target_date - timedelta(days=1)}T12:00:00"
     to_iso = f"{target_date + timedelta(days=1)}T14:00:00"
-
     config = load_config()
     headers = {
         "Accept": "application/json",
         "Accept-Version": "v1",
         "Authorization": f"Bearer {config['FR24']['token_auth']}",
     }
-
     try:
         response = requests.get(
             "https://fr24api.flightradar24.com/api/flight-summary/light",
@@ -526,18 +524,18 @@ def fetch_and_filter_flights(flight_filter_key, flight_filter_value, target_date
         response.raise_for_status()
     except requests.RequestException as e:
         return {"error": "Failed to fetch data from FR24 API", "details": str(e)}, 502
-
     flights = response.json().get("data", [])
     filtered = []
-
     with managed_cursor(mainConn) as cursor:
         for f in flights:
             orig_icao = f.get("orig_icao")
             dest_icao = f.get("dest_icao")
             takeoff_str = f.get("datetime_takeoff")
+            first_seen_str = f.get("first_seen")
             landing_str = f.get("datetime_landed")
-
-            if orig_icao and takeoff_str:
+            last_seen_str = f.get("last_seen")
+            
+            if orig_icao and (takeoff_str or first_seen_str):
                 cursor.execute(
                     "SELECT latitude, longitude FROM airports WHERE ident = :icao",
                     {"icao": orig_icao},
@@ -545,25 +543,33 @@ def fetch_and_filter_flights(flight_filter_key, flight_filter_value, target_date
                 orig_coords = cursor.fetchone()
                 if orig_coords:
                     try:
-                        utc_takeoff = datetime.fromisoformat(
-                            takeoff_str.replace("Z", "+00:00")
+                        # Use takeoff time if available, otherwise fall back to first_seen
+                        departure_str = takeoff_str if takeoff_str else first_seen_str
+                        utc_departure = datetime.fromisoformat(
+                            departure_str.replace("Z", "+00:00")
                         )
-                        local_takeoff = getLocalDatetime(
-                            orig_coords[0], orig_coords[1], utc_takeoff
+                        local_departure = getLocalDatetime(
+                            orig_coords[0], orig_coords[1], utc_departure
                         )
-
-                        if local_takeoff.date() == target_date:
-                            f["datetime_takeoff_local"] = local_takeoff.isoformat()
-
-                            if dest_icao and landing_str:
+                        if local_departure.date() == target_date:
+                            # Set the appropriate field based on what we used
+                            if takeoff_str:
+                                f["datetime_takeoff_local"] = local_departure.isoformat()
+                            else:
+                                f["datetime_takeoff_local"] = local_departure.isoformat()
+                                f["_used_first_seen_for_takeoff"] = True  # Optional flag for debugging
+                            
+                            if dest_icao and (landing_str or last_seen_str):
                                 cursor.execute(
                                     "SELECT latitude, longitude FROM airports WHERE ident = :icao",
                                     {"icao": dest_icao},
                                 )
                                 dest_coords = cursor.fetchone()
                                 if dest_coords:
+                                    # Use landing time if available, otherwise fall back to last_seen
+                                    arrival_str = landing_str if landing_str else last_seen_str
                                     utc_landing = datetime.fromisoformat(
-                                        landing_str.replace("Z", "+00:00")
+                                        arrival_str.replace("Z", "+00:00")
                                     )
                                     local_landing = getLocalDatetime(
                                         dest_coords[0], dest_coords[1], utc_landing
@@ -571,7 +577,9 @@ def fetch_and_filter_flights(flight_filter_key, flight_filter_value, target_date
                                     f["datetime_landed_local"] = (
                                         local_landing.isoformat()
                                     )
-
+                                    # Optional flag for debugging
+                                    if not landing_str:
+                                        f["_used_last_seen_for_landing"] = True
                             filtered.append(f)
                     except Exception:
                         pass
