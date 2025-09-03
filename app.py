@@ -2768,15 +2768,20 @@ def login():
     - Verifies hashed password against the database.
     - Updates legacy hashed passwords to use 'scrypt'.
     - Redirects authenticated users to the home page, else shows an error.
+    - Supports raw login for API clients by passing ?raw=1
     """
 
+    # Check if this is a raw request (no redirect)
+    raw = request.args.get("raw") == "1"
+
     # Check if the user is already logged in
-    username = session.get("logged_in")
-    if username and session.get(username):
-        return redirect(url_for("user_home", username=username))
+    if request.method == "GET":
+        username = session.get("logged_in")
+        if username and session.get(username):
+            return "" if raw else redirect(url_for("user_home", username=username))
 
     # Handle POST request for login
-    if request.method == "POST":
+    elif request.method == "POST":
         # Safely get form data to avoid KeyError
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
@@ -2787,7 +2792,7 @@ def login():
             log_denied_login(
                 "missing_credentials", username, getRequestData(request), getIp(request)
             )
-            return redirect(url_for("login"))
+            return ("Missing credentials", 400) if raw else redirect(url_for("login"))
 
         # Check for denied login attempts (e.g., rate limiting)
         if not check_denied_login(getIp(request), username):
@@ -2796,7 +2801,7 @@ def login():
             log_denied_login(
                 "too_many_requests", username, getRequestData(request), getIp(request)
             )
-            return redirect(url_for("login"))
+            return ("Too many attempts", 429) if raw else redirect(url_for("login"))
 
         # Fetch the user by username or email
         user = User.query.filter(
@@ -2822,7 +2827,7 @@ def login():
             )
             changeLang(user.lang, session)
 
-            return redirect(url_for("landing", username=username))
+            return ("Success", 200) if raw else redirect(url_for("landing", username=username))
         else:
             # Log denied login attempts
             if user is None:
@@ -2838,7 +2843,7 @@ def login():
                 )
 
             flash(lang[session["userinfo"]["lang"]]["invalidCredentials"])
-            return redirect(url_for("login"))
+            return ("Invalid credentials", 401) if raw else redirect(url_for("login"))
 
     # Handle GET request: Render login form
     return render_template(
