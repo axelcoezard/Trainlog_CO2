@@ -178,6 +178,7 @@ from py.utils import (
 )
 from src.api.admin import admin_blueprint
 from src.api.feature_requests import feature_requests_blueprint
+from src.api.news import news_blueprint
 from src.api.finance import finance_blueprint
 from src.consts import DbNames, TripTypes
 from src.pg import setup_db
@@ -225,6 +226,7 @@ app.url_map.strict_slashes = False
 app.register_blueprint(admin_blueprint, url_prefix="/admin")
 app.register_blueprint(feature_requests_blueprint)
 app.register_blueprint(finance_blueprint)
+app.register_blueprint(news_blueprint)
 
 app.config["CACHE_TYPE"] = "SimpleCache"
 app.config["CACHE_DEFAULT_TIMEOUT"] = 864000

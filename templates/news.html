@@ -1,0 +1,211 @@
+{% extends "bootstrap/layout.html" %}
+{% block content %}
+
+{% include nav %}
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-3">
+        <div>
+            <h1>{{ news_title or "News & Updates" }}</h1>
+            <p class="text-muted">{{ news_subtitle or "Latest updates and announcements" }}</p>
+        </div>
+    </div>
+    
+    {% if is_owner %}
+        <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#newsModal">
+            <i class="fa-solid fa-plus"></i> {{ news_add_button or "Add News" }}
+        </button>
+    {% endif %}
+    
+    <!-- News Items -->
+    <div class="row">
+        {% if news_list %}
+            {% for item in news_list %}
+            <div class="col-12 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h4 class="card-title mb-2">{{ item.title }}</h4>
+                                <div class="card-text">
+                                    {{ item.content|replace('**', '')|replace('\n', '<br>')|safe }}
+                                </div>
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        {{ news_by or "By" }} 
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fa-solid fa-crown"></i> {{ item.author_display }}
+                                        </span>
+                                         • 
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ item.created.strftime('%Y-%m-%d %H:%M') if item.created else (news_unknown or "Unknown") }}
+                                        {% if item.last_modified and item.last_modified != item.created %}
+                                        <span class="text-muted ms-2">
+                                            ({{ news_edited or "Edited" }}: {{ item.last_modified.strftime('%Y-%m-%d %H:%M') }})
+                                        </span>
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- Edit/Delete Buttons (Owner Only) -->
+                            {% if is_owner %}
+                            <div class="ms-3">
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary" 
+                                            data-news-id="{{ item.id }}" 
+                                            data-news-title="{{ item.title }}" 
+                                            data-news-content="{{ item.content }}"
+                                            onclick="editNewsFromData(this)">
+                                        <i class="fa-solid fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" 
+                                            data-news-id="{{ item.id }}" 
+                                            data-news-title="{{ item.title }}"
+                                            onclick="deleteNewsFromData(this)">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="fa-solid fa-newspaper"></i> {{ news_empty or "No news items yet." }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add News Modal (Owner Only) -->
+{% if is_owner %}
+<div class="modal fade" id="newsModal" tabindex="-1" aria-labelledby="newsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newsModalLabel">{{ news_modal_title or "Add News Item" }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ news_close or "Close" }}"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newsForm" method="POST" action="{{ url_for('news.submit_news', username=username) }}">
+                    <div class="form-group mb-3">
+                        <label for="title" class="form-label">{{ news_form_title_label or "Title" }}</label>
+                        <input type="text" class="form-control" id="title" name="title" required maxlength="200">
+                        <div class="form-text">{{ news_form_title_hint or "Enter a clear, concise title" }}</div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="content" class="form-label">{{ news_form_content_label or "Content" }}</label>
+                        <textarea class="form-control" id="content" name="content" rows="6" required></textarea>
+                        <div class="form-text">{{ news_form_content_hint or "Enter the full news content. Line breaks will be preserved." }}</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ cancel or "Cancel" }}</button>
+                        <button type="submit" class="btn btn-primary">{{ submit or "Submit" }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit News Modal (Owner Only) -->
+<div class="modal fade" id="editNewsModal" tabindex="-1" aria-labelledby="editNewsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editNewsModalLabel">{{ news_edit_title or "Edit News Item" }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ news_close or "Close" }}"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editNewsForm" method="POST" action="{{ url_for('news.edit_news', username=username) }}">
+                    <input type="hidden" id="editNewsId" name="news_id">
+                    <div class="form-group mb-3">
+                        <label for="editTitle" class="form-label">{{ news_form_title_label or "Title" }}</label>
+                        <input type="text" class="form-control" id="editTitle" name="title" required maxlength="200">
+                        <div class="form-text">{{ news_form_title_hint or "Enter a clear, concise title" }}</div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="editContent" class="form-label">{{ news_form_content_label or "Content" }}</label>
+                        <textarea class="form-control" id="editContent" name="content" rows="6" required></textarea>
+                        <div class="form-text">{{ news_form_content_hint or "Enter the full news content. Line breaks will be preserved." }}</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ cancel or "Cancel" }}</button>
+                        <button type="submit" class="btn btn-primary">{{ update or "Update" }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal (Owner Only) -->
+<div class="modal fade" id="deleteNewsModal" tabindex="-1" aria-labelledby="deleteNewsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteNewsModalLabel">{{ news_delete_title or "Delete News Item" }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ news_close or "Close" }}"></button>
+            </div>
+            <div class="modal-body">
+                <p>{{ news_delete_confirm or "Are you sure you want to delete" }} "<span id="deleteNewsTitle"></span>"?</p>
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-triangle-exclamation"></i> {{ news_delete_warning or "This action cannot be undone." }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ cancel or "Cancel" }}</button>
+                <form id="deleteNewsForm" method="POST" action="{{ url_for('news.delete_news', username=username) }}" class="d-inline">
+                    <input type="hidden" id="deleteNewsId" name="news_id">
+                    <button type="submit" class="btn btn-danger">{{ delete or "Delete" }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function editNewsFromData(button) {
+    const id = button.getAttribute('data-news-id');
+    const title = button.getAttribute('data-news-title');
+    const content = button.getAttribute('data-news-content');
+    
+    document.getElementById('editNewsId').value = id;
+    document.getElementById('editTitle').value = title;
+    document.getElementById('editContent').value = content;
+    
+    const modal = new bootstrap.Modal(document.getElementById('editNewsModal'));
+    modal.show();
+}
+
+function deleteNewsFromData(button) {
+    const id = button.getAttribute('data-news-id');
+    const title = button.getAttribute('data-news-title');
+    
+    document.getElementById('deleteNewsId').value = id;
+    document.getElementById('deleteNewsTitle').textContent = title;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteNewsModal'));
+    modal.show();
+}
+
+// Reset forms when modals are hidden
+{% if is_owner %}
+document.getElementById('newsModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('newsForm').reset();
+});
+
+document.getElementById('editNewsModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('editNewsForm').reset();
+});
+{% endif %}
+</script>
+
+{% endblock %}
