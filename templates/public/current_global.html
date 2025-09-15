@@ -19,6 +19,8 @@
 <script src="{{ url_for('static', filename='js/util.js') }}"></script>
 <script>
 var logosList = {{logosList | safe}};
+var apiEndpoint = "{{ api_endpoint }}";  // Dynamic endpoint variable
+
 /* ───────────────────────────── helper utilities ───────────────────────── */
 function formatDT(iso) {
   if (!iso) return {date:"-", time:"-"};
@@ -170,7 +172,7 @@ function densifyPath(path, type){
 
 function splitFuture(path, progress){
   const idx = Math.floor(progress * path.length);
-  return path.slice(idx);        // from ‘idx’ to end  (can be [P] length 1)
+  return path.slice(idx);        // from 'idx' to end  (can be [P] length 1)
 }
 
 /* ────────────────────────── marker / AntPath helpers ──────────────────── */
@@ -232,7 +234,7 @@ function renderTrips(trips){
       );
     }
 
-    /*  Live-position marker (will “move” because we rebuild, not duplicate) */
+    /*  Live-position marker (will "move" because we rebuild, not duplicate) */
     const pegPos = fullPath[Math.floor(progress * (fullPath.length - 1))];
     tripsLayerGroup.addLayer(placePeg(pegPos, trip));
   });
@@ -259,7 +261,7 @@ var map = createMap({
 }, null);
 
 function loadTrips(){
-  $.get("/public/current_trips", renderTrips);
+  $.get(apiEndpoint, renderTrips);  // Use the dynamic endpoint
 }
 
 loadTrips();                    // first draw

@@ -9148,8 +9148,16 @@ def router_status():
     )
 
 
-@app.route("/public/current_trips")
-def get_public_current_trips():
+def get_current_trips_data(public_only=True):
+    """
+    Get current trips data, optionally filtered by public visibility.
+    
+    Args:
+        public_only (bool): If True, only return trips from public users
+    
+    Returns:
+        list: List of trip data with paths and distances
+    """
     # 1. Get all trips that are currently in progress
     with managed_cursor(mainConn) as cursor:
         cursor.execute("""
@@ -9159,37 +9167,43 @@ def get_public_current_trips():
             AND type not in ('poi', 'accommodation', 'restaurant', 'walk', 'cycle', 'car')
         """)
         trips = cursor.fetchall()
+    
     if not trips:
-        return jsonify([])
-
-    # 2. Collect usernames
-    usernames = {trip["username"] for trip in trips}
-
-    # 3. Batch fetch public users via SQLAlchemy
-    public_users = {
-        u.username
-        for u in User.query.filter(
-            User.username.in_(usernames), User.appear_on_global
-        ).all()
-    }
-
-    # 4. Filter trips to only public users
-    public_trips = [trip for trip in trips if trip["username"] in public_users]
-    if not public_trips:
-        return jsonify([])
-
-    trip_ids = [trip["uid"] for trip in public_trips]
-
-    # 5. Get paths
+        return []
+    
+    # 2. Filter trips based on visibility requirements
+    if public_only:
+        # Collect usernames
+        usernames = {trip["username"] for trip in trips}
+        # Batch fetch public users via SQLAlchemy
+        public_users = {
+            u.username
+            for u in User.query.filter(
+                User.username.in_(usernames), User.appear_on_global
+            ).all()
+        }
+        # Filter trips to only public users
+        filtered_trips = [trip for trip in trips if trip["username"] in public_users]
+    else:
+        # Return all trips (for owner/admin access)
+        filtered_trips = trips
+    
+    if not filtered_trips:
+        return []
+    
+    trip_ids = [trip["uid"] for trip in filtered_trips]
+    
+    # 3. Get paths
     formattedGetUserLines = getUserLines.format(
         trip_ids=", ".join(("?",) * len(trip_ids))
     )
     with managed_cursor(pathConn) as cursor:
         pathResult = cursor.execute(formattedGetUserLines, tuple(trip_ids)).fetchall()
+    
     paths = {path["trip_id"]: path["path"] for path in pathResult}
-
+    
     result = []
-    for trip in public_trips:
+    for trip in filtered_trips:
         path = json.loads(paths.get(trip["uid"], "[]"))
         result.append(
             {
@@ -9199,6 +9213,22 @@ def get_public_current_trips():
                 "distances": getDistanceFromPath(path),
             }
         )
+    
+    return result
+
+
+@app.route("/public/current_trips")
+def get_public_current_trips():
+    """Get all currently active trips from public users."""
+    result = get_current_trips_data(public_only=True)
+    return jsonify(result)
+
+
+@app.route("/admin/current_trips")
+@owner_required
+def get_all_current_trips():
+    """Get all currently active trips (admin/owner access required)."""
+    result = get_current_trips_data(public_only=False)
     return jsonify(result)
 
 
@@ -9213,10 +9243,27 @@ def live_map():
         username=getUser(),
         logosList=listOperatorsLogos(),
         translations=lang[session["userinfo"]["lang"]],
+        api_endpoint=url_for("get_public_current_trips"),
         **lang[session["userinfo"]["lang"]],
         **session["userinfo"],
     )
 
+@app.route("/admin/live_map")
+@owner_required
+def admin_live_map():
+    """
+    Shows the global map of ALL users currently traveling (admin/owner access)
+    """
+    return render_template(
+        "public/current_global.html",  # Same template
+        title=f"Admin {lang[session['userinfo']['lang']]['live_map']}",
+        username=getUser(),
+        logosList=listOperatorsLogos(),
+        translations=lang[session["userinfo"]["lang"]],
+        api_endpoint=url_for("get_all_current_trips"),
+        **lang[session["userinfo"]["lang"]],
+        **session["userinfo"],
+    )
 
 @app.route("/api/user_completion/<username>")
 @login_required
