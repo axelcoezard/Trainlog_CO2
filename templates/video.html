@@ -215,10 +215,6 @@
   function setProgress(pct){ $progressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`; }
   function setSpinner(show){ $spinner.classList.toggle('hidden', !show); }
 
-  // --- camera smoothing helpers ---
-const CAM_ALPHA_POS   = 0.05; // 0..1  (smaller = smoother)
-const CAM_ALPHA_BEAR  = 0.07;
-
 let camSmoothCenter = null;   // [lng, lat] in mercator meters internally
 let camSmoothBearing = null;
 
@@ -345,6 +341,9 @@ function buildRouteSegments(trips){
     
     // Add to combined coords for camera movement
     allRouteCoords = allRouteCoords.concat(processedCoords);
+    // Build a single line for along-route sampling (for helicopter follow)
+    combinedLine = allRouteCoords.length >= 2 ? turf.lineString(allRouteCoords) : null;
+    combinedLenKm = combinedLine ? turf.length(combinedLine, { units: 'kilometers' }) : 0;
   }
 }
 
@@ -488,11 +487,16 @@ function setRouteProgress(p){
 }
 
 
-// Camera constants (restore jumpTo zoom control)
-const CAMERA_LEAD  = 0.01;   // keep your lead
-const CAMERA_ZOOM  = 10;     // same as your top block
-const CAMERA_PITCH = 45;
-const ROT_SPEED    = 15;     // degrees per second
+// Follow-cam tuning
+const CAM_ALPHA_POS   = 0.03;   // stronger smoothing for buttery motion
+const CAM_ALPHA_BEAR  = 0.015;
+const CAMERA_ZOOM     = 10;     // "about 10"
+const CAMERA_PITCH    = 45;
+const CAMERA_LEAD_M   = 1200;   // meters to look ahead along the path
+const SUBJECT_OFFSET_Y_FRAC = 0.12; // keep subject slightly below center (12% of viewport)
+
+let combinedLine = null;   // turf line of the entire route
+let combinedLenKm = 0;     // total length in km
 
 
 const TYPE_COLORS = {
@@ -510,49 +514,73 @@ const TYPE_COLORS = {
 };
 
 
+// ---- Bearing smoothing helpers ----
+function angleDiffDeg(a, b){
+  // shortest signed diff b-a in [-180,180)
+  return ((b - a + 540) % 360) - 180;
+}
+
+function clamp(val, lo, hi){ return Math.max(lo, Math.min(hi, val)); }
+
+function avgBearingDeg(bearingsDeg, weights){
+  // Vector (cos/sin) average to avoid wrap issues, weights sum arbitrary
+  let x = 0, y = 0;
+  for (let i = 0; i < bearingsDeg.length; i++){
+    const rad = bearingsDeg[i] * Math.PI/180;
+    const w   = weights ? (weights[i] || 0) : 1;
+    x += Math.cos(rad) * w;
+    y += Math.sin(rad) * w;
+  }
+  if (x === 0 && y === 0) return bearingsDeg[0] || 0;
+  let deg = Math.atan2(y, x) * 180/Math.PI;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
+
 function setCamera(p){
   p = clamp01(p);
-  if (allRouteCoords.length === 0 || totalRouteDistance === 0) return;
+  if (!combinedLine || combinedLenKm <= 0) return;
 
-  // Distance-based lead along the full route (keeps your proportional timing)
-  const targetDistance = (p + CAMERA_LEAD) * totalRouteDistance;
-  let currentDistance = 0;
-  let cameraCoord = allRouteCoords[0]; // fallback
+  // Where are we along the route?
+  const distKm        = p * combinedLenKm;
+  const leadKm        = Math.max(0, Math.min(combinedLenKm, distKm + (CAMERA_LEAD_M / 1000)));
+  const hereFeature   = turf.along(combinedLine, distKm, { units: 'kilometers' });
+  const aheadFeature  = turf.along(combinedLine, leadKm, { units: 'kilometers' });
 
-  for (const segment of routeSegments) {
-    const segmentEndDistance = currentDistance + segment.distance;
-    if (targetDistance <= segmentEndDistance) {
-      const segProgress = segment.distance > 0
-        ? (targetDistance - currentDistance) / segment.distance
-        : 0;
-      const segIndex = Math.round(segProgress * (segment.coords.length - 1));
-      cameraCoord = segment.coords[segIndex] || segment.coords[0];
-      break;
-    }
-    currentDistance += segment.distance;
-  }
+  const here  = hereFeature.geometry.coordinates;   // [lng, lat]
+  const ahead = aheadFeature.geometry.coordinates;  // [lng, lat]
 
-  // Smooth time-based rotation (as you had it)
-  const elapsed = p * DURATION;
-  const desiredBearing = (elapsed * ROT_SPEED) % 360;
+  // Bearing from tangent (helicopter "pointing where we go")
+  // Small helper: turf.bearing returns -180..180
+  let desiredBearing = turf.bearing(here, ahead);
+  desiredBearing = (desiredBearing + 360) % 360;
 
+  // First frame seed for smoothing
   if (!camSmoothCenter || camSmoothBearing == null){
-    resetCameraSmoothing(cameraCoord, desiredBearing);
+    resetCameraSmoothing(here, desiredBearing);
   }
 
-  const mercDesired = toMerc(cameraCoord);
+  // Smooth center & bearing
+  const mercDesired = toMerc(here);
   camSmoothCenter   = lerp2(camSmoothCenter, mercDesired, CAM_ALPHA_POS);
   camSmoothBearing  = lerpAngle(camSmoothBearing, desiredBearing, CAM_ALPHA_BEAR);
   const smoothedCenter = fromMerc(camSmoothCenter);
 
-  // Back to regular map.jumpTo so zoom is respected
+  // Keep subject a touch low in the frame (cinematic). Offset is in **pixels**.
+  const canvas = map.getCanvas();
+  const offsetPx = [0, SUBJECT_OFFSET_Y_FRAC * canvas.height];
+
+  // Regular jumpTo = unaffected by terrain elevation
   map.jumpTo({
     center:  smoothedCenter,
     bearing: camSmoothBearing,
     pitch:   CAMERA_PITCH,
-    zoom:    CAMERA_ZOOM
+    zoom:    CAMERA_ZOOM,
+    offset:  offsetPx
   });
 }
+
 
 
   // ------ Enhanced tile preloading with buffer zones ------
