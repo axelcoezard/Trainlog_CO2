@@ -9317,6 +9317,15 @@ def sitemap():
     response.headers['Content-Type'] = 'application/xml'
     return response
 
+@app.route("/video/<tripIds>")
+@owner_required
+def video(tripIds):
+    return render_template(
+        "video.html",
+        tripIds=tripIds,
+        **lang[session["userinfo"]["lang"]],
+        **session["userinfo"],
+    )
 
 @app.route("/<username>/dashboard")
 @login_required
