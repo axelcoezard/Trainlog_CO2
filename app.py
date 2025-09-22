@@ -5,14 +5,12 @@
 import calendar
 import csv
 import json
-import logging
 import logging.config
 import math
 import os
 import pathlib
 import re
 import secrets
-import smtplib
 import traceback
 import unicodedata as ud
 import urllib
@@ -21,7 +19,6 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from email.mime.text import MIMEText
 from functools import wraps
 from glob import glob
 from inspect import getcallargs
@@ -215,6 +212,8 @@ from src.trips import (
     delete_ticket_from_db
 )
 from src.paths import Path
+
+from py.co2_emissions import TravelEmissions
 
 app = Flask(__name__)
 app.config['DEBUG'] = True
@@ -1447,6 +1446,18 @@ def new(username, vehicle_type):
         currencyOptions=get_available_currencies(),
         user_currency=getLoggedUserCurrency(),
     )
+
+@app.route("/co2_emissions/train/<distance>/<country>/<passengers>")
+def co2_emissions(distance, country, passengers):
+    travel_emissions = TravelEmissions()
+
+    segments = [(float(distance), country)]
+    emissions = travel_emissions.train(segments, int(passengers))
+
+    if emissions is None:
+        return jsonify({"error": "Unsupported vehicle type"}), 400
+
+    return jsonify({"emissions_kg": emissions})
 
 
 @app.route("/<username>/new_tag")

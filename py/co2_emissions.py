@@ -127,15 +127,15 @@ class TravelEmissions:
         return total
 
 # Exemple d'utilisation
-if __name__ == "__main__":
-    emissions_calculator = TravelEmissions()
-    trips = [
-        {"mode": "car", "distance_km": 100, "passengers": 2},
-        {"mode": "train", "segments": [(200, "FR"), (150, "DE")], "passengers": 1},
-        {"mode": "plane", "distance_km": 1000},
-    ]
-    total_emissions = emissions_calculator.total_emissions(trips)
-    print(f"Total CO2 emissions for the trips: {total_emissions:.2f} kgCO2eq")
+# if __name__ == "__main__":
+#    emissions_calculator = TravelEmissions()
+        #    trips = [
+        #        {"mode": "car", "distance_km": 100, "passengers": 2},
+        #        {"mode": "train", "segments": [(200, "FR"), (150, "DE")], "passengers": 1},
+    #        {"mode": "plane", "distance_km": 1000},
+    #    ]
+    #    total_emissions = emissions_calculator.total_emissions(trips)
+    #    print(f"Total CO2 emissions for the trips: {total_emissions:.2f} kgCO2eq")
 
-    train_only = emissions_calculator.train([(300, "FR"), (200, "IT")], passengers=1)
-    print(f"Total CO2 emissions for the train trip: {train_only:.2f} kgCO2eq")
+    #    train_only = emissions_calculator.train([(300, "FR"), (200, "IT")], passengers=1)
+#    print(f"Total CO2 emissions for the train trip: {train_only:.2f} kgCO2eq")
